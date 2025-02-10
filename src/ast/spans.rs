@@ -32,10 +32,10 @@ use super::{
     JoinOperator, JsonPath, JsonPathElem, LateralView, MatchRecognizePattern, Measure,
     NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
     OnInsert, OrderBy, OrderByExpr, Partition, PivotValueSource, ProjectionSelect, Query,
-    ReferentialAction, RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select,
-    SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias,
-    TableAliasColumnDef, TableConstraint, TableFactor, TableObject, TableOptionsClustered,
-    TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
+    RaiseStatement, RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, UpdateTableFromKind, Use, Value, Values, ViewColumnDef,
     WildcardAdditionalOptions, With, WithFill,
 };
 
@@ -325,6 +325,7 @@ impl Spanned for Statement {
             } => source.span(),
             Statement::Case(stmt) => stmt.span(),
             Statement::If(stmt) => stmt.span(),
+            Statement::Raise(stmt) => stmt.span(),
             Statement::Call(function) => function.span(),
             Statement::Copy {
                 source,
@@ -777,6 +778,28 @@ impl Spanned for ConditionalStatements {
         } = self;
 
         union_spans(iter::once(condition.span()).chain(statements.iter().map(|s| s.span())))
+    }
+}
+
+impl Spanned for RaiseStatement {
+    fn span(&self) -> Span {
+        let RaiseStatement { value } = self;
+
+        union_spans(value.iter().map(|value| value.span()))
+    }
+}
+
+/// # partial span
+///
+/// Missing spans:
+/// - [RaiseStatementValue::UsingMessage]
+/// - [RaiseStatementValue::Expr]
+impl Spanned for RaiseStatementValue {
+    fn span(&self) -> Span {
+        match self {
+            RaiseStatementValue::UsingMessage(_value) => Span::empty(),
+            RaiseStatementValue::Expr(_value) => Span::empty(),
+        }
     }
 }
 
