@@ -79,6 +79,10 @@ impl Dialect for BigQueryDialect {
         true
     }
 
+    fn supports_group_by_expr(&self) -> bool {
+        true
+    }
+
     /// See [doc](https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value)
     fn supports_window_function_null_treatment_arg(&self) -> bool {
         true
