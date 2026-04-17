@@ -191,6 +191,44 @@ fn parse_create_table_isolated_loading() {
 }
 
 #[test]
+fn parse_create_table_partition_by() {
+    teradata().verified_stmt("CREATE TABLE foo (id INT) PARTITION BY COLUMN");
+    teradata().verified_stmt(
+        "CREATE TABLE foo (id INT) PARTITION BY RANGE_N(id BETWEEN 1 AND 100 EACH 10)",
+    );
+    teradata().verified_stmt(
+        "CREATE TABLE foo (id INT, col VARCHAR(10)) PARTITION BY CASE_N(col = 'A', col = 'B', NO CASE, UNKNOWN)",
+    );
+}
+
+#[test]
+fn parse_range_n() {
+    let d = all_dialects_where(|d| d.supports_range_function());
+    d.verified_expr("RANGE_N(id BETWEEN 1 AND 100)");
+    d.verified_expr("RANGE_N(id BETWEEN 1 AND 100 EACH 10)");
+    d.verified_expr("RANGE_N(id BETWEEN * AND 100)");
+    d.verified_expr("RANGE_N(id BETWEEN 1 AND *)");
+    d.verified_expr("RANGE_N(id BETWEEN * AND *)");
+    d.verified_expr("RANGE_N(id BETWEEN * AND 100 EACH 10)");
+    d.verified_expr("RANGE_N(id BETWEEN 1 AND 100, UNKNOWN)");
+    d.verified_expr("RANGE_N(id BETWEEN 1 AND 100, NO RANGE)");
+    d.verified_expr("RANGE_N(id BETWEEN 1 AND 100, NO RANGE OR UNKNOWN)");
+    d.verified_expr("RANGE_N(id BETWEEN 1 AND 100 EACH 10, NO RANGE, UNKNOWN)");
+    d.verified_expr("RANGE_N(id BETWEEN 1 AND 100 EACH 10, 200 AND 300 EACH 20)");
+    d.verified_expr("RANGE_N(id BETWEEN 1 AND 100, 200 AND 300)");
+}
+
+#[test]
+fn parse_case_n() {
+    let d = all_dialects_where(|d| d.supports_range_function());
+    d.verified_expr("CASE_N(col = 'A', col = 'B')");
+    d.verified_expr("CASE_N(col = 'A', col = 'B', UNKNOWN)");
+    d.verified_expr("CASE_N(col = 'A', col = 'B', NO CASE)");
+    d.verified_expr("CASE_N(col = 'A', col = 'B', NO CASE OR UNKNOWN)");
+    d.verified_expr("CASE_N(col = 'A', col = 'B', NO CASE, UNKNOWN)");
+}
+
+#[test]
 fn parse_create_table_combined() {
     teradata().verified_stmt(concat!(
         "CREATE MULTISET VOLATILE TABLE foo, NO FALLBACK, NO BEFORE JOURNAL, ",

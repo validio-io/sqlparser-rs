@@ -444,7 +444,10 @@ pub fn call(function: &str, args: impl IntoIterator<Item = Expr>) -> Expr {
             duplicate_treatment: None,
             args: args
                 .into_iter()
-                .map(|arg| FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)))
+                .map(|arg| FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(arg),
+                    each: None,
+                })
                 .collect(),
             clauses: vec![],
         }),

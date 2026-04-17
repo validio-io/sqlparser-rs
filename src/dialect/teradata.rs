@@ -94,4 +94,9 @@ impl Dialect for TeradataDialect {
     fn supports_leading_comma_before_table_options(&self) -> bool {
         true
     }
+
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Functions-Expressions-and-Predicates/Range-and-Case-Partitioning-Functions)
+    fn supports_range_function(&self) -> bool {
+        true
+    }
 }

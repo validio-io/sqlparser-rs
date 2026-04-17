@@ -2237,9 +2237,10 @@ fn parse_map_access_expr() {
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            number("2").with_empty_span(),
-                        )))],
+                        args: vec![FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::Value(number("2").with_empty_span())),
+                            each: None,
+                        }],
                         clauses: vec![],
                     }),
                     filter: None,

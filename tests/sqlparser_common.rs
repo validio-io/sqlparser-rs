@@ -1357,7 +1357,10 @@ fn parse_select_count_wildcard() {
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
+                args: vec![FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Wildcard,
+                    each: None
+                }],
                 clauses: vec![],
             }),
             null_treatment: None,
@@ -1380,10 +1383,13 @@ fn parse_select_count_distinct() {
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: Some(DuplicateTreatment::Distinct),
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::UnaryOp {
-                    op: UnaryOperator::Plus,
-                    expr: Box::new(Expr::Identifier(Ident::new("x"))),
-                }))],
+                args: vec![FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::UnaryOp {
+                        op: UnaryOperator::Plus,
+                        expr: Box::new(Expr::Identifier(Ident::new("x"))),
+                    }),
+                    each: None
+                }],
                 clauses: vec![],
             }),
             null_treatment: None,
@@ -2987,7 +2993,10 @@ fn parse_select_having() {
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Wildcard)],
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Wildcard,
+                        each: None
+                    }],
                     clauses: vec![],
                 }),
                 null_treatment: None,
@@ -3451,12 +3460,16 @@ fn parse_listagg() {
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: Some(DuplicateTreatment::Distinct),
                 args: vec![
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(Ident::new(
-                        "dateid"
-                    )))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::SingleQuotedString(", ".to_owned())).with_empty_span()
-                    )))
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("dateid"))),
+                        each: None
+                    },
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value(
+                            (Value::SingleQuotedString(", ".to_owned())).with_empty_span()
+                        )),
+                        each: None
+                    }
                 ],
                 clauses: vec![FunctionArgumentClause::OnOverflow(
                     ListAggOnOverflow::Truncate {
@@ -3618,8 +3631,10 @@ fn parse_window_function_null_treatment_arg() {
                 .all(|clause| !matches!(clause, FunctionArgumentClause::OrderBy(_)))
         });
         assert_eq!(1, arg_list.args.len());
-        let FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(actual_expr))) =
-            &arg_list.args[0]
+        let FunctionArg::Unnamed {
+            expr: FunctionArgExpr::Expr(Expr::Identifier(actual_expr)),
+            each: None,
+        } = &arg_list.args[0]
         else {
             unreachable!()
         };
@@ -5880,13 +5895,14 @@ fn test_parse_named_window() {
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                            Expr::Identifier(Ident {
+                        args: vec![FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::Identifier(Ident {
                                 value: "c12".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
-                            }),
-                        ))],
+                            })),
+                            each: None,
+                        }],
                         clauses: vec![],
                     }),
                     null_treatment: None,
@@ -5915,13 +5931,14 @@ fn test_parse_named_window() {
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                            Expr::Identifier(Ident {
+                        args: vec![FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::Identifier(Ident {
                                 value: "c12".to_string(),
                                 quote_style: None,
                                 span: Span::empty(),
-                            }),
-                        ))],
+                            })),
+                            each: None,
+                        }],
                         clauses: vec![],
                     }),
                     null_treatment: None,
@@ -9021,12 +9038,19 @@ fn lateral_function() {
                     lateral: true,
                     name: ObjectName::from(vec!["generate_series".into()]),
                     args: vec![
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            (number("1")).with_empty_span(),
-                        ))),
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(
-                            vec![Ident::new("customer"), Ident::new("id")],
-                        ))),
+                        FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::Value(
+                                (number("1")).with_empty_span(),
+                            )),
+                            each: None,
+                        },
+                        FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::CompoundIdentifier(vec![
+                                Ident::new("customer"),
+                                Ident::new("id"),
+                            ])),
+                            each: None,
+                        },
                     ],
                     alias: None,
                 },
@@ -12244,9 +12268,12 @@ fn parse_call() {
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    (Value::SingleQuotedString("a".to_string())).with_empty_span()
-                )))],
+                args: vec![FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Value(
+                        (Value::SingleQuotedString("a".to_string())).with_empty_span()
+                    )),
+                    each: None
+                }],
                 clauses: vec![],
             }),
             name: ObjectName::from(vec![Ident::new("my_procedure")]),
@@ -12714,9 +12741,12 @@ fn parse_map_access_expr() {
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            (number("2")).with_empty_span(),
-                        )))],
+                        args: vec![FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::Value(
+                                (number("2")).with_empty_span(),
+                            )),
+                            each: None,
+                        }],
                         clauses: vec![],
                     }),
                     filter: None,
@@ -13054,9 +13084,10 @@ fn test_selective_aggregation() {
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("name"))
-                    ))],
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("name"))),
+                        each: None
+                    }],
                     clauses: vec![],
                 }),
                 filter: Some(Box::new(Expr::IsNotNull(Box::new(Expr::Identifier(
@@ -13073,9 +13104,10 @@ fn test_selective_aggregation() {
                     parameters: FunctionArguments::None,
                     args: FunctionArguments::List(FunctionArgumentList {
                         duplicate_treatment: None,
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                            Expr::Identifier(Ident::new("name"))
-                        ))],
+                        args: vec![FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("name"))),
+                            each: None
+                        }],
                         clauses: vec![],
                     }),
                     filter: Some(Box::new(Expr::Like {
@@ -15503,9 +15535,10 @@ fn parse_composite_access_expr() {
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("a"))
-                    ))],
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("a"))),
+                        each: None
+                    }],
                     clauses: vec![],
                 }),
                 null_treatment: None,
@@ -15527,9 +15560,10 @@ fn parse_composite_access_expr() {
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("a"))
-                    ))],
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("a"))),
+                        each: None
+                    }],
                     clauses: vec![],
                 }),
                 null_treatment: None,
@@ -15553,9 +15587,10 @@ fn parse_composite_access_expr() {
             parameters: FunctionArguments::None,
             args: FunctionArguments::List(FunctionArgumentList {
                 duplicate_treatment: None,
-                args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                    Expr::Identifier(Ident::new("a")),
-                ))],
+                args: vec![FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("a"))),
+                    each: None,
+                }],
                 clauses: vec![],
             }),
             null_treatment: None,

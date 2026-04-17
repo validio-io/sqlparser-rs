@@ -773,9 +773,10 @@ fn parse_create_table_with_primary_key() {
                 assert_eq!(
                     actual.args,
                     FunctionArguments::List(FunctionArgumentList {
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(
-                            Ident::new(arg)
-                        )),)],
+                        args: vec![FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Identifier(Ident::new(arg))),
+                            each: None
+                        }],
                         duplicate_treatment: None,
                         clauses: vec![],
                     })
@@ -880,9 +881,10 @@ fn parse_create_table_with_variant_default_expressions() {
                                 name: ObjectName::from(vec![Ident::new("toString")]),
                                 uses_odbc_syntax: false,
                                 args: FunctionArguments::List(FunctionArgumentList {
-                                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                        Identifier(Ident::new("c"))
-                                    ))],
+                                    args: vec![FunctionArg::Unnamed {
+                                        expr: FunctionArgExpr::Expr(Identifier(Ident::new("c"))),
+                                        each: None
+                                    }],
                                     duplicate_treatment: None,
                                     clauses: vec![],
                                 }),
@@ -1089,11 +1091,17 @@ fn parse_select_parametric_function() {
                     assert_eq!(args.args.len(), 2);
                     assert_eq!(
                         args.args[0],
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("x"))))
+                        FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Identifier(Ident::from("x"))),
+                            each: None
+                        }
                     );
                     assert_eq!(
                         args.args[1],
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Identifier(Ident::from("y"))))
+                        FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Identifier(Ident::from("y"))),
+                            each: None
+                        }
                     );
 
                     let parameters = match f.parameters {
@@ -1103,15 +1111,21 @@ fn parse_select_parametric_function() {
                     assert_eq!(parameters.args.len(), 2);
                     assert_eq!(
                         parameters.args[0],
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            (Value::Number("0.5".parse().unwrap(), false)).with_empty_span()
-                        )))
+                        FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::Value(
+                                (Value::Number("0.5".parse().unwrap(), false)).with_empty_span()
+                            )),
+                            each: None
+                        }
                     );
                     assert_eq!(
                         parameters.args[1],
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            (Value::Number("0.6".parse().unwrap(), false)).with_empty_span()
-                        )))
+                        FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::Value(
+                                (Value::Number("0.6".parse().unwrap(), false)).with_empty_span()
+                            )),
+                            each: None
+                        }
                     );
                 }
                 _ => unreachable!(),
@@ -1613,9 +1627,10 @@ fn parse_select_table_function_settings() {
     check_settings(
         "SELECT * FROM table_function(arg, SETTINGS s0 = 3, s1 = 's')",
         &TableFunctionArgs {
-            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                Expr::Identifier("arg".into()),
-            ))],
+            args: vec![FunctionArg::Unnamed {
+                expr: FunctionArgExpr::Expr(Expr::Identifier("arg".into())),
+                each: None,
+            }],
 
             settings: Some(vec![
                 Setting {
@@ -1632,9 +1647,10 @@ fn parse_select_table_function_settings() {
     check_settings(
         r#"SELECT * FROM table_function(arg)"#,
         &TableFunctionArgs {
-            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                Expr::Identifier("arg".into()),
-            ))],
+            args: vec![FunctionArg::Unnamed {
+                expr: FunctionArgExpr::Expr(Expr::Identifier("arg".into())),
+                each: None,
+            }],
             settings: None,
         },
     );

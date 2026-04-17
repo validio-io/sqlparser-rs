@@ -1085,18 +1085,24 @@ fn parse_mssql_json_array() {
         }) => {
             assert_eq!(
                 &[
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::SingleQuotedString("a".into())).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (number("1")).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::Null).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (number("2")).with_empty_span()
-                    ))),
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value(
+                            (Value::SingleQuotedString("a".into())).with_empty_span()
+                        )),
+                        each: None
+                    },
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value((number("1")).with_empty_span())),
+                        each: None
+                    },
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value((Value::Null).with_empty_span())),
+                        each: None
+                    },
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value((number("2")).with_empty_span())),
+                        each: None
+                    },
                 ],
                 &args[..]
             );
@@ -1117,18 +1123,24 @@ fn parse_mssql_json_array() {
         }) => {
             assert_eq!(
                 &[
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::SingleQuotedString("a".into())).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (number("1")).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (Value::Null).with_empty_span()
-                    ))),
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        (number("2")).with_empty_span()
-                    ))),
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value(
+                            (Value::SingleQuotedString("a".into())).with_empty_span()
+                        )),
+                        each: None
+                    },
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value((number("1")).with_empty_span())),
+                        each: None
+                    },
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value((Value::Null).with_empty_span())),
+                        each: None
+                    },
+                    FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value((number("2")).with_empty_span())),
+                        each: None
+                    },
                 ],
                 &args[..]
             );
@@ -1182,14 +1194,20 @@ fn parse_mssql_json_array() {
             ..
         }) => {
             assert_eq!(
-                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    (Value::SingleQuotedString("a".into())).with_empty_span()
-                ))),
+                &FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Value(
+                        (Value::SingleQuotedString("a".into())).with_empty_span()
+                    )),
+                    each: None
+                },
                 &args[0]
             );
             assert!(matches!(
                 args[1],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+                FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Function(_)),
+                    each: None
+                }
             ));
             assert_eq!(
                 &[FunctionArgumentClause::JsonNullClause(
@@ -1209,18 +1227,27 @@ fn parse_mssql_json_array() {
             ..
         }) => {
             assert_eq!(
-                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    (Value::SingleQuotedString("a".into())).with_empty_span()
-                ))),
+                &FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Value(
+                        (Value::SingleQuotedString("a".into())).with_empty_span()
+                    )),
+                    each: None
+                },
                 &args[0]
             );
             assert!(matches!(
                 args[1],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+                FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Function(_)),
+                    each: None
+                }
             ));
             assert!(matches!(
                 args[2],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Function(_)))
+                FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Function(_)),
+                    each: None
+                }
             ));
         }
         _ => unreachable!(),
@@ -1232,18 +1259,25 @@ fn parse_mssql_json_array() {
             ..
         }) => {
             assert_eq!(
-                &FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                    (number("1")).with_empty_span()
-                ))),
+                &FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Value((number("1")).with_empty_span())),
+                    each: None
+                },
                 &args[0]
             );
             assert!(matches!(
                 args[1],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(_)))
+                FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Identifier(_)),
+                    each: None
+                }
             ));
             assert!(matches!(
                 args[2],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Subquery(_)))
+                FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::Subquery(_)),
+                    each: None
+                }
             ));
         }
         _ => unreachable!(),
@@ -1264,15 +1298,24 @@ fn parse_mssql_json_array() {
         } => {
             assert!(matches!(
                 args[0],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+                FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                    each: None
+                }
             ));
             assert!(matches!(
                 args[1],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+                FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                    each: None
+                }
             ));
             assert!(matches!(
                 args[2],
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)))
+                FunctionArg::Unnamed {
+                    expr: FunctionArgExpr::Expr(Expr::CompoundIdentifier(_)),
+                    each: None
+                }
             ));
             assert_eq!(
                 &[FunctionArgumentClause::JsonNullClause(
@@ -1879,8 +1922,7 @@ fn parse_create_table_with_valid_options() {
                                 FunctionArgumentList {
                                     duplicate_treatment: None,
                                     args: vec![
-                                        FunctionArg::Unnamed(
-                                            FunctionArgExpr::Expr(
+                                        FunctionArg::Unnamed { expr: FunctionArgExpr::Expr(
                                                 Expr::Identifier(
                                                     Ident {
                                                         value: "column_a".to_string(),
@@ -1888,10 +1930,8 @@ fn parse_create_table_with_valid_options() {
                                                         span: Span::empty(),
                                                     },
                                                 ),
-                                            ),
-                                        ),
-                                        FunctionArg::Unnamed(
-                                            FunctionArgExpr::Expr(
+                                            ), each: None },
+                                        FunctionArg::Unnamed { expr: FunctionArgExpr::Expr(
                                                 Expr::Identifier(
                                                     Ident {
                                                         value: "column_b".to_string(),
@@ -1899,8 +1939,7 @@ fn parse_create_table_with_valid_options() {
                                                         span: Span::empty(),
                                                     },
                                                 ),
-                                            ),
-                                        ),
+                                            ), each: None },
                                     ],
                                     clauses: vec![],
                                 },

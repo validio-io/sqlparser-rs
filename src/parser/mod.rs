@@ -4321,19 +4321,33 @@ impl<'a> Parser<'a> {
         Ok(in_op)
     }
 
-    /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already consumed.
+    /// Parses `BETWEEN <low> AND <high>`, assuming the `BETWEEN` keyword was already
+    /// consumed. `*` is accepted as a bound when the dialect sets
+    /// [`Dialect::supports_range_function`] (for Teradata's `RANGE_N(...)`).
     pub fn parse_between(&mut self, expr: Expr, negated: bool) -> Result<Expr, ParserError> {
         // Stop parsing subexpressions for <low> and <high> on tokens with
         // precedence lower than that of `BETWEEN`, such as `AND`, `IS`, etc.
-        let low = self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?;
+        let low = self.parse_between_bound()?;
         self.expect_keyword_is(Keyword::AND)?;
-        let high = self.parse_subexpr(self.dialect.prec_value(Precedence::Between))?;
+        let high = self.parse_between_bound()?;
         Ok(Expr::Between {
             expr: Box::new(expr),
             negated,
             low: Box::new(low),
             high: Box::new(high),
         })
+    }
+
+    /// Parse a single `BETWEEN` bound. Accepts `*` as a wildcard when the dialect sets
+    /// [`Dialect::supports_range_function`] (used inside Teradata's `RANGE_N(...)`).
+    fn parse_between_bound(&mut self) -> Result<Expr, ParserError> {
+        if self.dialect.supports_range_function()
+            && matches!(self.peek_token_ref().token, Token::Mul)
+        {
+            let token = self.next_token();
+            return Ok(Expr::Wildcard(AttachedToken(token)));
+        }
+        self.parse_subexpr(self.dialect.prec_value(Precedence::Between))
     }
 
     /// Parse a PostgreSQL casting style which is in the form of `expr::datatype`.
@@ -9169,7 +9183,7 @@ impl<'a> Parser<'a> {
         if !table_properties.is_empty() {
             table_options = CreateTableOptions::TableProperties(table_properties);
         }
-        let partition_by = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect)
+        let partition_by = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect | TeradataDialect)
             && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
         {
             Some(Box::new(self.parse_expr()?))
@@ -18577,8 +18591,44 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a [FunctionArg::Keyword].
+    fn maybe_parse_keyword_function_arg(&mut self) -> Result<Option<FunctionArg>, ParserError> {
+        if !self.dialect.supports_range_function() {
+            return Ok(None);
+        }
+
+        let start_span = self.peek_token_ref().span;
+
+        let keyword = if self.parse_keyword(Keyword::UNKNOWN) {
+            KeywordFunctionArg::Unknown
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::CASE, Keyword::OR, Keyword::UNKNOWN])
+        {
+            KeywordFunctionArg::NoCaseOrUnknown
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::RANGE, Keyword::OR, Keyword::UNKNOWN])
+        {
+            KeywordFunctionArg::NoRangeOrUnknown
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::CASE]) {
+            KeywordFunctionArg::NoCase
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::RANGE]) {
+            KeywordFunctionArg::NoRange
+        } else {
+            return Ok(None);
+        };
+
+        let end_span = self.get_previous_token().span;
+
+        Ok(Some(FunctionArg::Keyword {
+            span: start_span.union(&end_span),
+            keyword,
+        }))
+    }
+
     /// Parse a single function argument, handling named and unnamed variants.
     pub fn parse_function_args(&mut self) -> Result<FunctionArg, ParserError> {
+        if let Some(arg) = self.maybe_parse_keyword_function_arg()? {
+            return Ok(arg);
+        }
+
         let arg = if self.dialect.supports_named_fn_args_with_expr_name() {
             self.maybe_parse(|p| {
                 let name = p.parse_expr()?;
@@ -18624,7 +18674,15 @@ impl<'a> Parser<'a> {
             }
             other => other.into(),
         };
-        Ok(FunctionArg::Unnamed(arg_expr))
+        let each = if self.dialect.supports_range_function() && self.parse_keyword(Keyword::EACH) {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+        Ok(FunctionArg::Unnamed {
+            expr: arg_expr,
+            each,
+        })
     }
 
     fn parse_function_named_arg_operator(&mut self) -> Result<FunctionArgOperator, ParserError> {

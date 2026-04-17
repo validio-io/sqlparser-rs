@@ -2148,12 +2148,19 @@ impl Spanned for FunctionArg {
                 arg,
                 operator: _,
             } => name.span.union(&arg.span()),
-            FunctionArg::Unnamed(arg) => arg.span(),
+            FunctionArg::Unnamed { expr, each } => {
+                let span = expr.span();
+                match each {
+                    Some(step) => span.union(&step.span()),
+                    None => span,
+                }
+            }
             FunctionArg::ExprNamed {
                 name,
                 arg,
                 operator: _,
             } => name.span().union(&arg.span()),
+            FunctionArg::Keyword { span, keyword: _ } => *span,
         }
     }
 }

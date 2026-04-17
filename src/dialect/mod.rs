@@ -1215,6 +1215,15 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports Teradata-style `RANGE_N` / `CASE_N` range
+    /// functions. Enables:
+    /// - `<expr> [NOT] BETWEEN <low> AND <high> EACH <step>` — the trailing `EACH`
+    ///   step on a `BETWEEN` expression (used inside `RANGE_N(...)`).
+    /// - `NO CASE` as a standalone expression (used inside `CASE_N(...)`).
+    fn supports_range_function(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect supports PartiQL for querying semi-structured data
     /// <https://partiql.org/index.html>
     fn supports_partiql(&self) -> bool {

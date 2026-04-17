@@ -531,9 +531,10 @@ fn test_snowflake_create_table_cluster_by() {
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("c"))
-                            ))],
+                            args: vec![FunctionArg::Unnamed {
+                                expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("c"))),
+                                each: None
+                            }],
                             duplicate_treatment: None,
                             clauses: vec![],
                         }),
@@ -1651,9 +1652,10 @@ fn test_alter_table_clustering() {
                         uses_odbc_syntax: false,
                         parameters: FunctionArguments::None,
                         args: FunctionArguments::List(FunctionArgumentList {
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("c3"))
-                            ))],
+                            args: vec![FunctionArg::Unnamed {
+                                expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("c3"))),
+                                each: None
+                            }],
                             duplicate_treatment: None,
                             clauses: vec![],
                         }),
@@ -4769,9 +4771,12 @@ fn test_snowflake_identifier_function() {
             assert_eq!(
                 *args,
                 FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("email".to_string()).into()
-                    )))],
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("email".to_string()).into()
+                        )),
+                        each: None
+                    }],
                     clauses: vec![],
                     duplicate_treatment: None
                 })
@@ -4790,9 +4795,12 @@ fn test_snowflake_identifier_function() {
             assert_eq!(
                 *args,
                 FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("\"Email\"".to_string()).into()
-                    )))],
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("\"Email\"".to_string()).into()
+                        )),
+                        each: None
+                    }],
                     clauses: vec![],
                     duplicate_treatment: None
                 })
@@ -4814,9 +4822,12 @@ fn test_snowflake_identifier_function() {
             assert_eq!(
                 *args,
                 FunctionArguments::List(FunctionArgumentList {
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("alias1".to_string()).into()
-                    )))],
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("alias1".to_string()).into()
+                        )),
+                        each: None
+                    }],
                     clauses: vec![],
                     duplicate_treatment: None
                 })
@@ -4832,9 +4843,12 @@ fn test_snowflake_identifier_function() {
                 db_name,
                 ObjectName(vec![ObjectNamePart::Function(ObjectNamePartFunction {
                     name: Ident::new("IDENTIFIER"),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("tbl".to_string()).into()
-                    )))]
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("tbl".to_string()).into()
+                        )),
+                        each: None
+                    }]
                 })])
             );
         }
@@ -4849,9 +4863,12 @@ fn test_snowflake_identifier_function() {
                 SchemaName::Simple(ObjectName(vec![ObjectNamePart::Function(
                     ObjectNamePartFunction {
                         name: Ident::new("IDENTIFIER"),
-                        args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                            Value::SingleQuotedString("db1.sc1".to_string()).into()
-                        )))]
+                        args: vec![FunctionArg::Unnamed {
+                            expr: FunctionArgExpr::Expr(Expr::Value(
+                                Value::SingleQuotedString("db1.sc1".to_string()).into()
+                            )),
+                            each: None
+                        }]
                     }
                 )]))
             );
@@ -4866,9 +4883,12 @@ fn test_snowflake_identifier_function() {
                 name,
                 ObjectName(vec![ObjectNamePart::Function(ObjectNamePartFunction {
                     name: Ident::new("IDENTIFIER"),
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-                        Value::SingleQuotedString("tbl".to_string()).into()
-                    )))]
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Value(
+                            Value::SingleQuotedString("tbl".to_string()).into()
+                        )),
+                        each: None
+                    }]
                 })])
             );
         }

@@ -2920,20 +2920,22 @@ fn parse_create_indices_with_operator_classes() {
                         args: FunctionArguments::List(FunctionArgumentList {
                             duplicate_treatment: None,
                             args: vec![
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
-                                    Ident {
+                                FunctionArg::Unnamed {
+                                    expr: FunctionArgExpr::Expr(Expr::Identifier(Ident {
                                         value: "first_name".to_owned(),
                                         quote_style: None,
                                         span: Span::empty(),
-                                    },
-                                ))),
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
-                                    Ident {
+                                    })),
+                                    each: None,
+                                },
+                                FunctionArg::Unnamed {
+                                    expr: FunctionArgExpr::Expr(Expr::Identifier(Ident {
                                         value: "last_name".to_owned(),
                                         quote_style: None,
                                         span: Span::empty(),
-                                    },
-                                ))),
+                                    })),
+                                    each: None,
+                                },
                             ],
                             clauses: vec![],
                         }),
@@ -3864,8 +3866,8 @@ fn test_composite_value() {
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Array(
-                        Array {
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Array(Array {
                             elem: vec![
                                 Expr::Value(
                                     (Value::SingleQuotedString("i".to_string())).with_empty_span()
@@ -3875,8 +3877,9 @@ fn test_composite_value() {
                                 ),
                             ],
                             named: true
-                        }
-                    )))],
+                        })),
+                        each: None
+                    }],
                     clauses: vec![],
                 }),
                 null_treatment: None,
@@ -5678,9 +5681,10 @@ fn parse_create_table_with_partition_by() {
                         FunctionArguments::List(FunctionArgumentList {
                             duplicate_treatment: None,
                             clauses: vec![],
-                            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                                Expr::Identifier(Ident::new("a"))
-                            ))],
+                            args: vec![FunctionArg::Unnamed {
+                                expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("a"))),
+                                each: None
+                            }],
                         }),
                         f.args
                     );

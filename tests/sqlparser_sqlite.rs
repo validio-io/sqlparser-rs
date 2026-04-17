@@ -430,9 +430,10 @@ fn parse_window_function_with_filter() {
                 parameters: FunctionArguments::None,
                 args: FunctionArguments::List(FunctionArgumentList {
                     duplicate_treatment: None,
-                    args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
-                        Expr::Identifier(Ident::new("x"))
-                    ))],
+                    args: vec![FunctionArg::Unnamed {
+                        expr: FunctionArgExpr::Expr(Expr::Identifier(Ident::new("x"))),
+                        each: None
+                    }],
                     clauses: vec![],
                 }),
                 null_treatment: None,

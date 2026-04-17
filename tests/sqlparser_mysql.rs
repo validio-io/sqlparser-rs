@@ -832,9 +832,10 @@ fn parse_create_table_primary_and_unique_key_with_index_options() {
 
 #[test]
 fn parse_prefix_key_part() {
-    let expected = vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(
-        number("10"),
-    )))];
+    let expected = vec![FunctionArg::Unnamed {
+        expr: FunctionArgExpr::Expr(Expr::value(number("10"))),
+        each: None,
+    }];
     for sql in [
         "CREATE INDEX idx_index ON t(textcol(10))",
         "ALTER TABLE tab ADD INDEX idx_index (textcol(10))",

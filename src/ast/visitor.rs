@@ -590,7 +590,7 @@ where
 ///           uses_odbc_syntax: false,
 ///           args: FunctionArguments::List(FunctionArgumentList {
 ///               duplicate_treatment: None,
-///               args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(old_expr))],
+///               args: vec![FunctionArg::Unnamed { expr: FunctionArgExpr::Expr(old_expr), each: None }],
 ///               clauses: vec![],
 ///           }),
 ///           null_treatment: None,

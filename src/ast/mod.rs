@@ -7874,6 +7874,47 @@ impl fmt::Display for FunctionArgOperator {
     }
 }
 
+/// A keyword function argument.
+///
+/// Example:
+/// ```sql
+/// SELECT CASE_N('A', 'B', NO CASE);
+/// SELECT CASE_N('A', 'B', NO CASE OR UNKNOWN);
+/// ```
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Functions-Expressions-and-Predicates/Arithmetic-Trigonometric-Hyperbolic-Operators/Functions/CASE_N/CASE_N-Function-Syntax)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum KeywordFunctionArg {
+    /// `UNKNOWN`
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Functions-Expressions-and-Predicates/Arithmetic-Trigonometric-Hyperbolic-Operators/Functions/RANGE_N/RANGE_N-Function-Syntax)
+    Unknown,
+    /// `NO RANGE`
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Functions-Expressions-and-Predicates/Arithmetic-Trigonometric-Hyperbolic-Operators/Functions/RANGE_N/RANGE_N-Function-Syntax)
+    NoRange,
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Functions-Expressions-and-Predicates/Arithmetic-Trigonometric-Hyperbolic-Operators/Functions/CASE_N/CASE_N-Function-Syntax)
+    NoCase,
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Functions-Expressions-and-Predicates/Arithmetic-Trigonometric-Hyperbolic-Operators/Functions/CASE_N/CASE_N-Function-Syntax)
+    NoCaseOrUnknown,
+    /// `NO RANGE OR UNKNOWN`
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Functions-Expressions-and-Predicates/Arithmetic-Trigonometric-Hyperbolic-Operators/Functions/RANGE_N/RANGE_N-Function-Syntax)
+    NoRangeOrUnknown,
+}
+
+impl fmt::Display for KeywordFunctionArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let arg = match self {
+            KeywordFunctionArg::Unknown => "UNKNOWN",
+            KeywordFunctionArg::NoCase => "NO CASE",
+            KeywordFunctionArg::NoRange => "NO RANGE",
+            KeywordFunctionArg::NoCaseOrUnknown => "NO CASE OR UNKNOWN",
+            KeywordFunctionArg::NoRangeOrUnknown => "NO RANGE OR UNKNOWN",
+        };
+
+        write!(f, "{arg}")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
@@ -7901,8 +7942,28 @@ pub enum FunctionArg {
         /// The operator separating name and value.
         operator: FunctionArgOperator,
     },
-    /// An unnamed argument (positional), given by expression or wildcard.
-    Unnamed(FunctionArgExpr),
+    /// An unnamed argument (positional), given by an expression (or wildcard).
+    Unnamed {
+        /// The argument expression or wildcard form.
+        expr: FunctionArgExpr,
+        /// `EACH <step>` trailer following the argument expression.
+        ///
+        /// Example:
+        /// ```sql
+        /// SELECT RANGE_N(id BETWEEN 1 AND 10 EACH 2);
+        /// ```
+        /// Enabled when [`Dialect::supports_range_function`] returns true.
+        ///
+        /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Functions-Expressions-and-Predicates/Arithmetic-Trigonometric-Hyperbolic-Operators/Functions/RANGE_N/RANGE_N-Function-Syntax)
+        each: Option<Box<Expr>>,
+    },
+    /// A function argument given by a keyword.
+    Keyword {
+        /// Span of the keyword.
+        span: Span,
+        /// The keyword argument.
+        keyword: KeywordFunctionArg,
+    },
 }
 
 impl fmt::Display for FunctionArg {
@@ -7918,7 +7979,14 @@ impl fmt::Display for FunctionArg {
                 arg,
                 operator,
             } => write!(f, "{name} {operator} {arg}"),
-            FunctionArg::Unnamed(unnamed_arg) => write!(f, "{unnamed_arg}"),
+            FunctionArg::Unnamed { expr, each } => {
+                write!(f, "{expr}")?;
+                if let Some(step) = each {
+                    write!(f, " EACH {step}")?;
+                }
+                Ok(())
+            }
+            FunctionArg::Keyword { span: _, keyword } => write!(f, "{keyword}"),
         }
     }
 }
