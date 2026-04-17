@@ -3464,28 +3464,29 @@ impl fmt::Display for PrimaryIndex {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum WithData {
-    /// `WITH DATA`
-    ///
-    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
-    Data,
-    /// `WITH NO DATA`
-    ///
-    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
-    NoData,
-    /// `WITH DATA AND STATISTICS`
-    ///
-    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
-    DataAndStatistics,
+pub struct WithData {
+    /// `true` for `WITH DATA`, `false` for `WITH NO DATA`.
+    pub data: bool,
+    /// `Some(true)` for `AND STATISTICS`, `Some(false)` for `AND NO STATISTICS`,
+    /// `None` if the `AND [NO] STATISTICS` sub-clause is omitted.
+    pub statistics: Option<bool>,
 }
 
 impl fmt::Display for WithData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self {
-            WithData::Data => "WITH DATA",
-            WithData::NoData => "WITH NO DATA",
-            WithData::DataAndStatistics => "WITH DATA AND STATISTICS",
-        })
+        f.write_str("WITH ")?;
+        if !self.data {
+            f.write_str("NO ")?;
+        }
+        f.write_str("DATA")?;
+        if let Some(stats) = self.statistics {
+            f.write_str(" AND ")?;
+            if !stats {
+                f.write_str("NO ")?;
+            }
+            f.write_str("STATISTICS")?;
+        }
+        Ok(())
     }
 }
 
@@ -3536,6 +3537,26 @@ pub enum TableAttribute {
     ///
     /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Detailed-Topics/CREATE-TABLE-Options/CREATE-TABLE-Table-Options-Clause/LOG-and-NO-LOG)
     Log(bool),
+    /// `BLOCKCOMPRESSION = <value>`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/blockcompression)
+    BlockCompression(Ident),
+    /// `BLOCKCOMPRESSIONALGORITHM = <value>`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/blockcompression)
+    BlockCompressionAlgorithm(Ident),
+    /// `BLOCKCOMPRESSIONLEVEL = { <integer> | DEFAULT }`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/blockcompression)
+    BlockCompressionLevel(BlockCompressionLevel),
+    /// `MAP` clause.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/MAP)
+    Map(MapTableOption),
+    /// `ISOLATED LOADING` clause.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/isolated_loading)
+    IsolatedLoading(IsolatedLoading),
 }
 
 impl fmt::Display for TableAttribute {
@@ -3552,6 +3573,13 @@ impl fmt::Display for TableAttribute {
             TableAttribute::FreeSpace(p) => write!(f, "FREESPACE = {p}"),
             TableAttribute::Log(true) => f.write_str("LOG"),
             TableAttribute::Log(false) => f.write_str("NO LOG"),
+            TableAttribute::BlockCompression(v) => write!(f, "BLOCKCOMPRESSION = {v}"),
+            TableAttribute::BlockCompressionAlgorithm(v) => {
+                write!(f, "BLOCKCOMPRESSIONALGORITHM = {v}")
+            }
+            TableAttribute::BlockCompressionLevel(v) => write!(f, "BLOCKCOMPRESSIONLEVEL = {v}"),
+            TableAttribute::Map(m) => write!(f, "{m}"),
+            TableAttribute::IsolatedLoading(i) => write!(f, "{i}"),
         }
     }
 }
@@ -3719,6 +3747,108 @@ impl fmt::Display for DataBlockUnit {
             DataBlockUnit::KBytes => "KBYTES",
             DataBlockUnit::Kilobytes => "KILOBYTES",
         })
+    }
+}
+
+/// `MAP` clause on `CREATE TABLE`.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/MAP)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct MapTableOption {
+    /// Map name.
+    pub name: ObjectName,
+    /// Optional `COLOCATE USING <table>` target.
+    pub colocate_using: Option<ObjectName>,
+}
+
+impl fmt::Display for MapTableOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MAP = {}", self.name)?;
+        if let Some(t) = &self.colocate_using {
+            write!(f, " COLOCATE USING {t}")?;
+        }
+        Ok(())
+    }
+}
+
+/// `ISOLATED LOADING` clause on `CREATE TABLE`.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/isolated_loading)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IsolatedLoading {
+    /// `true` => `WITH NO [CONCURRENT] ISOLATED LOADING`, `false` => plain form.
+    pub no: bool,
+    /// Whether the optional `CONCURRENT` keyword was present.
+    pub concurrent: bool,
+    /// Optional `FOR { ALL | INSERT | NONE }` qualifier.
+    pub for_qualifier: Option<IsolatedLoadingFor>,
+}
+
+impl fmt::Display for IsolatedLoading {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("WITH ")?;
+        if self.no {
+            f.write_str("NO ")?;
+        }
+        if self.concurrent {
+            f.write_str("CONCURRENT ")?;
+        }
+        f.write_str("ISOLATED LOADING")?;
+        if let Some(for_) = &self.for_qualifier {
+            write!(f, " FOR {for_}")?;
+        }
+        Ok(())
+    }
+}
+
+/// `FOR` qualifier for an [`IsolatedLoading`] clause.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/isolated_loading)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IsolatedLoadingFor {
+    /// `FOR ALL`
+    All,
+    /// `FOR INSERT`
+    Insert,
+    /// `FOR NONE`
+    None,
+}
+
+impl fmt::Display for IsolatedLoadingFor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            IsolatedLoadingFor::All => "ALL",
+            IsolatedLoadingFor::Insert => "INSERT",
+            IsolatedLoadingFor::None => "NONE",
+        })
+    }
+}
+
+/// Value of the `BLOCKCOMPRESSIONLEVEL` table option.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/blockcompression)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum BlockCompressionLevel {
+    /// `DEFAULT`
+    Default,
+    /// Explicit integer compression level.
+    Value(u64),
+}
+
+impl fmt::Display for BlockCompressionLevel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BlockCompressionLevel::Default => f.write_str("DEFAULT"),
+            BlockCompressionLevel::Value(v) => write!(f, "{v}"),
+        }
     }
 }
 

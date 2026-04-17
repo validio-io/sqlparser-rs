@@ -96,6 +96,9 @@ fn parse_create_table_as_with_data() {
     teradata().verified_stmt("CREATE TABLE foo AS (SELECT 1 AS a) WITH DATA");
     teradata().verified_stmt("CREATE TABLE foo AS (SELECT 1 AS a) WITH NO DATA");
     teradata().verified_stmt("CREATE TABLE foo AS (SELECT 1 AS a) WITH DATA AND STATISTICS");
+    teradata().verified_stmt("CREATE TABLE foo AS (SELECT 1 AS a) WITH DATA AND NO STATISTICS");
+    teradata().verified_stmt("CREATE TABLE foo AS (SELECT 1 AS a) WITH NO DATA AND STATISTICS");
+    teradata().verified_stmt("CREATE TABLE foo AS (SELECT 1 AS a) WITH NO DATA AND NO STATISTICS");
 }
 
 #[test]
@@ -150,11 +153,51 @@ fn parse_create_table_log() {
 }
 
 #[test]
+fn parse_create_table_block_compression() {
+    for v in ["DEFAULT", "MANUAL", "NEVER", "ALWAYS", "AUTOTEMP"] {
+        teradata().verified_stmt(&format!(
+            "CREATE TABLE foo, BLOCKCOMPRESSION = {v} (id INT)"
+        ));
+    }
+    for v in ["ZLIB", "ELZS_H", "DEFAULT"] {
+        teradata().verified_stmt(&format!(
+            "CREATE TABLE foo, BLOCKCOMPRESSIONALGORITHM = {v} (id INT)"
+        ));
+    }
+    teradata().verified_stmt("CREATE TABLE foo, BLOCKCOMPRESSIONLEVEL = DEFAULT (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, BLOCKCOMPRESSIONLEVEL = 5 (id INT)");
+}
+
+#[test]
+fn parse_create_table_map() {
+    teradata().verified_stmt("CREATE TABLE foo, MAP = amp_map (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, MAP = amp_map COLOCATE USING other_tbl (id INT)");
+}
+
+#[test]
+fn parse_create_table_isolated_loading() {
+    teradata().verified_stmt("CREATE TABLE foo, WITH ISOLATED LOADING (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, WITH NO ISOLATED LOADING (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, WITH CONCURRENT ISOLATED LOADING (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, WITH NO CONCURRENT ISOLATED LOADING (id INT)");
+    for f in ["ALL", "INSERT", "NONE"] {
+        teradata().verified_stmt(&format!(
+            "CREATE TABLE foo, WITH CONCURRENT ISOLATED LOADING FOR {f} (id INT)"
+        ));
+        teradata().verified_stmt(&format!(
+            "CREATE TABLE foo, WITH ISOLATED LOADING FOR {f} (id INT)"
+        ));
+    }
+}
+
+#[test]
 fn parse_create_table_combined() {
     teradata().verified_stmt(concat!(
         "CREATE MULTISET VOLATILE TABLE foo, NO FALLBACK, NO BEFORE JOURNAL, ",
         "NO AFTER JOURNAL, CHECKSUM = DEFAULT, DEFAULT MERGEBLOCKRATIO, ",
-        "DATABLOCKSIZE = 12582912 BYTES, FREESPACE = 0 PERCENT ",
+        "DATABLOCKSIZE = 12582912 BYTES, FREESPACE = 0 PERCENT, ",
+        "BLOCKCOMPRESSION = AUTOTEMP, MAP = amp_map COLOCATE USING other_tbl, ",
+        "WITH CONCURRENT ISOLATED LOADING FOR ALL ",
         "(id INT, name VARCHAR(100)) ",
         "UNIQUE PRIMARY INDEX (id) ",
         "ON COMMIT PRESERVE ROWS"

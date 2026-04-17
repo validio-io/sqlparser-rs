@@ -8709,6 +8709,21 @@ impl<'a> Parser<'a> {
         if let Some(v) = self.maybe_parse_log()? {
             return Ok(TableAttribute::Log(v));
         }
+        if let Some(v) = self.maybe_parse_block_compression()? {
+            return Ok(TableAttribute::BlockCompression(v));
+        }
+        if let Some(v) = self.maybe_parse_block_compression_algorithm()? {
+            return Ok(TableAttribute::BlockCompressionAlgorithm(v));
+        }
+        if let Some(v) = self.maybe_parse_block_compression_level()? {
+            return Ok(TableAttribute::BlockCompressionLevel(v));
+        }
+        if let Some(v) = self.maybe_parse_map_table_option()? {
+            return Ok(TableAttribute::Map(v));
+        }
+        if let Some(v) = self.maybe_parse_isolated_loading()? {
+            return Ok(TableAttribute::IsolatedLoading(v));
+        }
         self.expected("table attribute", self.peek_token().clone())
     }
 
@@ -8849,19 +8864,136 @@ impl<'a> Parser<'a> {
         Ok(Percentage { value, percent })
     }
 
+    /// Parse `BLOCKCOMPRESSION` clause in a `CREATE TABLE` statement.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/blockcompression)
+    fn maybe_parse_block_compression(&mut self) -> Result<Option<Ident>, ParserError> {
+        if !self.parse_keyword(Keyword::BLOCKCOMPRESSION) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::Eq)?;
+        self.parse_identifier().map(Some)
+    }
+
+    /// Parse `BLOCKCOMPRESSIONALGORITHM` clause in a `CREATE TABLE` statement.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/blockcompression)
+    fn maybe_parse_block_compression_algorithm(&mut self) -> Result<Option<Ident>, ParserError> {
+        if !self.parse_keyword(Keyword::BLOCKCOMPRESSIONALGORITHM) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::Eq)?;
+        self.parse_identifier().map(Some)
+    }
+
+    /// Parse [`BlockCompressionLevel`] clause in a `CREATE TABLE` statement.
+    fn maybe_parse_block_compression_level(
+        &mut self,
+    ) -> Result<Option<BlockCompressionLevel>, ParserError> {
+        if !self.parse_keyword(Keyword::BLOCKCOMPRESSIONLEVEL) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::Eq)?;
+        if self.parse_keyword(Keyword::DEFAULT) {
+            Ok(Some(BlockCompressionLevel::Default))
+        } else {
+            Ok(Some(BlockCompressionLevel::Value(
+                self.parse_literal_uint()?,
+            )))
+        }
+    }
+
+    /// Parse [`MapTableOption`] clause in a `CREATE TABLE` statement.
+    fn maybe_parse_map_table_option(&mut self) -> Result<Option<MapTableOption>, ParserError> {
+        if !self.parse_keyword(Keyword::MAP) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::Eq)?;
+        let name = self.parse_object_name(false)?;
+        let colocate_using = if self.parse_keywords(&[Keyword::COLOCATE, Keyword::USING]) {
+            Some(self.parse_object_name(false)?)
+        } else {
+            None
+        };
+        Ok(Some(MapTableOption {
+            name,
+            colocate_using,
+        }))
+    }
+
+    /// Parse [`IsolatedLoading`] clause in a `CREATE TABLE` statement.
+    fn maybe_parse_isolated_loading(&mut self) -> Result<Option<IsolatedLoading>, ParserError> {
+        // Grammar: WITH [NO] [CONCURRENT] ISOLATED LOADING [FOR { ALL | INSERT | NONE }]
+        let (no, concurrent) = if self.parse_keywords(&[
+            Keyword::WITH,
+            Keyword::NO,
+            Keyword::CONCURRENT,
+            Keyword::ISOLATED,
+            Keyword::LOADING,
+        ]) {
+            (true, true)
+        } else if self.parse_keywords(&[
+            Keyword::WITH,
+            Keyword::CONCURRENT,
+            Keyword::ISOLATED,
+            Keyword::LOADING,
+        ]) {
+            (false, true)
+        } else if self.parse_keywords(&[
+            Keyword::WITH,
+            Keyword::NO,
+            Keyword::ISOLATED,
+            Keyword::LOADING,
+        ]) {
+            (true, false)
+        } else if self.parse_keywords(&[Keyword::WITH, Keyword::ISOLATED, Keyword::LOADING]) {
+            (false, false)
+        } else {
+            return Ok(None);
+        };
+
+        let for_qualifier = if self.parse_keyword(Keyword::FOR) {
+            Some(
+                match self.parse_one_of_keywords(&[Keyword::ALL, Keyword::INSERT, Keyword::NONE]) {
+                    Some(Keyword::ALL) => IsolatedLoadingFor::All,
+                    Some(Keyword::INSERT) => IsolatedLoadingFor::Insert,
+                    Some(Keyword::NONE) => IsolatedLoadingFor::None,
+                    _ => {
+                        return self
+                            .expected("ALL, INSERT, or NONE after FOR", self.peek_token().clone())
+                    }
+                },
+            )
+        } else {
+            None
+        };
+
+        Ok(Some(IsolatedLoading {
+            no,
+            concurrent,
+            for_qualifier,
+        }))
+    }
+
     /// Parse [`WithData`] clause on `CREATE TABLE ... AS` statement.
     fn maybe_parse_with_data(&mut self) -> Result<Option<WithData>, ParserError> {
-        if self.parse_keywords(&[Keyword::WITH, Keyword::DATA]) {
-            if self.parse_keywords(&[Keyword::AND, Keyword::STATISTICS]) {
-                Ok(Some(WithData::DataAndStatistics))
-            } else {
-                Ok(Some(WithData::Data))
-            }
+        let data = if self.parse_keywords(&[Keyword::WITH, Keyword::DATA]) {
+            true
         } else if self.parse_keywords(&[Keyword::WITH, Keyword::NO, Keyword::DATA]) {
-            Ok(Some(WithData::NoData))
+            false
         } else {
-            Ok(None)
-        }
+            return Ok(None);
+        };
+
+        let statistics = if self.parse_keywords(&[Keyword::AND, Keyword::STATISTICS]) {
+            Some(true)
+        } else if self.parse_keywords(&[Keyword::AND, Keyword::NO, Keyword::STATISTICS]) {
+            Some(false)
+        } else {
+            None
+        };
+
+        Ok(Some(WithData { data, statistics }))
     }
 
     /// Parse [`PrimaryIndex`] clause on `CREATE TABLE`.
