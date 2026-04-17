@@ -5124,6 +5124,7 @@ impl<'a> Parser<'a> {
     pub fn parse_create(&mut self) -> Result<Statement, ParserError> {
         let or_replace = self.parse_keywords(&[Keyword::OR, Keyword::REPLACE]);
         let or_alter = self.parse_keywords(&[Keyword::OR, Keyword::ALTER]);
+        let multiset = self.maybe_parse_multiset();
         let local = self.parse_one_of_keywords(&[Keyword::LOCAL]).is_some();
         let global = self.parse_one_of_keywords(&[Keyword::GLOBAL]).is_some();
         let transient = self.parse_one_of_keywords(&[Keyword::TRANSIENT]).is_some();
@@ -5137,13 +5138,14 @@ impl<'a> Parser<'a> {
         let temporary = self
             .parse_one_of_keywords(&[Keyword::TEMP, Keyword::TEMPORARY])
             .is_some();
+        let volatile = self.parse_keyword(Keyword::VOLATILE);
         let persistent = dialect_of!(self is DuckDbDialect)
             && self.parse_one_of_keywords(&[Keyword::PERSISTENT]).is_some();
         let create_view_params = self.parse_create_view_params()?;
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary, global, transient)
+            self.parse_create_table(or_replace, temporary, global, transient, volatile, multiset)
                 .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
@@ -8459,10 +8461,23 @@ impl<'a> Parser<'a> {
         temporary: bool,
         global: Option<bool>,
         transient: bool,
+        volatile: bool,
+        multiset: Option<bool>,
     ) -> Result<CreateTable, ParserError> {
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
+
+        let fallback = if self.dialect.supports_leading_comma_before_table_options() &&
+            self.consume_token(&Token::Comma) {
+            let fallback = self.maybe_parse_fallback()?;
+            if fallback.is_none() {
+                self.prev_token(); // Put back comma.
+            }
+            fallback
+        } else {
+            None
+        };
 
         // PostgreSQL PARTITION OF for child partition tables
         // Note: This is a PostgreSQL-specific feature, but the dialect check was intentionally
@@ -8553,6 +8568,8 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let primary_index = self.parse_primary_index()?;
+
         let on_commit = if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT]) {
             Some(self.parse_create_table_on_commit()?)
         } else {
@@ -8604,6 +8621,13 @@ impl<'a> Parser<'a> {
             None
         };
 
+        // `WITH DATA` clause only applies if there is a query body.
+        let with_data = if query.is_some() {
+            self.maybe_parse_with_data()?
+        } else {
+            None
+        };
+
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
             .columns(columns)
@@ -8611,6 +8635,9 @@ impl<'a> Parser<'a> {
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
             .transient(transient)
+            .volatile(volatile)
+            .multiset(multiset)
+            .fallback(fallback)
             .hive_distribution(hive_distribution)
             .hive_formats(hive_formats)
             .global(global)
@@ -8630,12 +8657,80 @@ impl<'a> Parser<'a> {
             .for_values(for_values)
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
+            .primary_index(primary_index)
+            .with_data(with_data)
             .strict(strict)
             .backup(backup)
             .diststyle(diststyle)
             .distkey(distkey)
             .sortkey(sortkey)
             .build())
+    }
+
+    /// Parse `MULTISET` table-kind prefix on `CREATE TABLE`.
+    fn maybe_parse_multiset(&mut self) -> Option<bool> {
+        match self.parse_one_of_keywords(&[Keyword::SET, Keyword::MULTISET]) {
+            Some(Keyword::MULTISET) => Some(true),
+            Some(Keyword::SET) => Some(false),
+            _ => None,
+        }
+    }
+
+    /// Parse `FALLBACK` option on a `CREATE TABLE` statement,
+    fn maybe_parse_fallback(&mut self) -> Result<Option<bool>, ParserError> {
+        if self.parse_keywords(&[Keyword::NO, Keyword::FALLBACK]) {
+            Ok(Some(false))
+        } else if self.parse_keyword(Keyword::FALLBACK) {
+            Ok(Some(true))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse [`WithData`] clause on `CREATE TABLE ... AS` statement.
+    fn maybe_parse_with_data(&mut self) -> Result<Option<WithData>, ParserError> {
+        if self.parse_keywords(&[Keyword::WITH, Keyword::DATA]) {
+            if self.parse_keywords(&[Keyword::AND, Keyword::STATISTICS]) {
+                Ok(Some(WithData::DataAndStatistics))
+            } else {
+                Ok(Some(WithData::Data))
+            }
+        } else if self.parse_keywords(&[Keyword::WITH, Keyword::NO, Keyword::DATA]) {
+            Ok(Some(WithData::NoData))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse [`PrimaryIndex`] clause on `CREATE TABLE`.
+    fn parse_primary_index(&mut self) -> Result<Option<PrimaryIndex>, ParserError> {
+        if self.parse_keywords(&[Keyword::NO, Keyword::PRIMARY, Keyword::INDEX]) {
+            return Ok(Some(PrimaryIndex::None));
+        }
+
+        let unique = self.parse_keyword(Keyword::UNIQUE);
+        if self.parse_keywords(&[Keyword::PRIMARY, Keyword::INDEX]) {
+            let name = if self.peek_token_ref().token != Token::LParen {
+                Some(self.parse_identifier()?)
+            } else {
+                None
+            };
+
+            self.expect_token(&Token::LParen)?;
+            let columns = self.parse_comma_separated(|p| p.parse_identifier())?;
+            self.expect_token(&Token::RParen)?;
+
+            Ok(Some(PrimaryIndex::Indexed {
+                unique,
+                name,
+                columns,
+            }))
+        } else if unique {
+            self.prev_token();
+            Ok(None)
+        } else {
+            Ok(None)
+        }
     }
 
     fn maybe_parse_create_table_like(

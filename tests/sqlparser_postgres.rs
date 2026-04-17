@@ -6688,6 +6688,10 @@ fn parse_trigger_related_functions() {
             distkey: None,
             sortkey: None,
             backup: None,
+            multiset: None,
+            fallback: None,
+            primary_index: None,
+            with_data: None,
         }
     );
 

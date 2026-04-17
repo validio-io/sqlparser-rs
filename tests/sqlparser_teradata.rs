@@ -18,6 +18,7 @@
 //! Test SQL syntax, specific to [sqlparser::dialect::TeradataDialect].
 
 use sqlparser::dialect::{Dialect, TeradataDialect};
+use sqlparser::test_utils::all_dialects_where;
 use test_utils::TestedDialects;
 
 mod test_utils;
@@ -45,6 +46,7 @@ fn dialect_methods() {
     assert!(d.supports_top_before_distinct());
     assert!(d.supports_window_function_null_treatment_arg());
     assert!(d.supports_string_literal_concatenation());
+    assert!(d.supports_leading_comma_before_table_options());
 }
 
 #[test]
@@ -60,4 +62,60 @@ fn parse_identifier() {
         "NULL AS a_1, ",
         r#"NULL AS "quoted id""#
     ));
+}
+
+#[test]
+fn parse_create_table_multiset() {
+    teradata().verified_stmt("CREATE MULTISET TABLE foo (id INT)");
+    teradata().verified_stmt("CREATE SET TABLE foo (id INT)");
+}
+
+#[test]
+fn parse_create_table_volatile() {
+    teradata().verified_stmt("CREATE VOLATILE TABLE foo (id INT)");
+    teradata().verified_stmt("CREATE MULTISET VOLATILE TABLE foo (id INT)");
+}
+
+#[test]
+fn parse_create_table_fallback() {
+    teradata().verified_stmt("CREATE TABLE foo, FALLBACK (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, NO FALLBACK (id INT)");
+    teradata().verified_stmt("CREATE MULTISET TABLE foo, NO FALLBACK (id INT)");
+}
+
+#[test]
+fn parse_create_table_primary_index() {
+    teradata().verified_stmt("CREATE TABLE foo (id INT) PRIMARY INDEX (id)");
+    teradata().verified_stmt("CREATE TABLE foo (id INT) UNIQUE PRIMARY INDEX (id)");
+    teradata().verified_stmt("CREATE TABLE foo (id INT, a INT) PRIMARY INDEX pk (id, a)");
+    teradata().verified_stmt("CREATE TABLE foo (id INT) NO PRIMARY INDEX");
+}
+
+#[test]
+fn parse_create_table_as_with_data() {
+    teradata().verified_stmt("CREATE TABLE foo AS (SELECT 1 AS a) WITH DATA");
+    teradata().verified_stmt("CREATE TABLE foo AS (SELECT 1 AS a) WITH NO DATA");
+    teradata().verified_stmt("CREATE TABLE foo AS (SELECT 1 AS a) WITH DATA AND STATISTICS");
+}
+
+#[test]
+fn parse_create_table_options() {
+    teradata().verified_stmt(concat!(
+        "CREATE MULTISET VOLATILE TABLE foo, NO FALLBACK ",
+        "(id INT, name VARCHAR(100)) ",
+        "UNIQUE PRIMARY INDEX (id) ",
+        "ON COMMIT PRESERVE ROWS"
+    ));
+}
+
+#[test]
+fn parse_leading_comma_before_table_options() {
+    let dialect = all_dialects_where(|d| d.supports_leading_comma_before_table_options());
+    dialect.verified_stmt("CREATE TABLE foo, FALLBACK (id INT)");
+
+    let unsupported_dialects =
+        all_dialects_where(|d| !d.supports_leading_comma_before_table_options());
+    assert!(unsupported_dialects
+        .parse_sql_statements("CREATE TABLE foo, FALLBACK (id INT)")
+        .is_err());
 }

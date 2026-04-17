@@ -3060,6 +3060,24 @@ pub struct CreateTable {
     /// Redshift `BACKUP` option: `BACKUP { YES | NO }`
     /// <https://docs.aws.amazon.com/redshift/latest/dg/r_CREATE_TABLE_NEW.html>
     pub backup: Option<bool>,
+    /// `MULTISET | SET` table-kind prefix.
+    /// `Some(true)` => `MULTISET`, `Some(false)` => `SET`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/MULTISET-or-SET)
+    pub multiset: Option<bool>,
+    /// `FALLBACK` clause.
+    /// `Some(true)` => `FALLBACK`, `Some(false)` => `NO FALLBACK`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/FALLBACK-or-NO-FALLBACK)
+    pub fallback: Option<bool>,
+    /// `PRIMARY INDEX` clause.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition)
+    pub primary_index: Option<PrimaryIndex>,
+    /// `WITH DATA` clause on a `CREATE TABLE ... AS` statement.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
+    pub with_data: Option<WithData>,
 }
 
 impl fmt::Display for CreateTable {
@@ -3073,7 +3091,7 @@ impl fmt::Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{temporary}{transient}{volatile}{dynamic}{iceberg}{snapshot}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{multiset}{temporary}{transient}{volatile}{dynamic}{iceberg}{snapshot}TABLE {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             snapshot = if self.snapshot { "SNAPSHOT " } else { "" },
@@ -3087,14 +3105,20 @@ impl fmt::Display for CreateTable {
                 })
                 .unwrap_or(""),
             if_not_exists = if self.if_not_exists { "IF NOT EXISTS " } else { "" },
+            multiset = self
+                .multiset
+                .map(|m| if m { "MULTISET " } else { "SET " })
+                .unwrap_or(""),
             temporary = if self.temporary { "TEMPORARY " } else { "" },
             transient = if self.transient { "TRANSIENT " } else { "" },
             volatile = if self.volatile { "VOLATILE " } else { "" },
-            // Only for Snowflake
             iceberg = if self.iceberg { "ICEBERG " } else { "" },
             dynamic = if self.dynamic { "DYNAMIC " } else { "" },
             name = self.name,
         )?;
+        if let Some(fallback) = self.fallback {
+            write!(f, ", {}", if fallback { "FALLBACK" } else { "NO FALLBACK" })?;
+        }
         if let Some(partition_of) = &self.partition_of {
             write!(f, " PARTITION OF {partition_of}")?;
         }
@@ -3351,6 +3375,9 @@ impl fmt::Display for CreateTable {
             write!(f, " REQUIRE USER")?;
         }
 
+        if let Some(primary_index) = &self.primary_index {
+            write!(f, " {primary_index}")?;
+        }
         if self.on_commit.is_some() {
             let on_commit = match self.on_commit {
                 Some(OnCommit::DeleteRows) => "ON COMMIT DELETE ROWS",
@@ -3378,7 +3405,87 @@ impl fmt::Display for CreateTable {
         if let Some(query) = &self.query {
             write!(f, " AS {query}")?;
         }
+        if let Some(with_data) = &self.with_data {
+            write!(f, " {with_data}")?;
+        }
         Ok(())
+    }
+}
+
+/// `PRIMARY INDEX` clause on `CREATE TABLE`.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum PrimaryIndex {
+    /// `NO PRIMARY INDEX`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition/NO-PRIMARY-INDEX)
+    None,
+    /// `[UNIQUE] PRIMARY INDEX [name] (col[, col]...)`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition/PRIMARY-INDEX-and-UNIQUE-PRIMARY-INDEX)
+    Indexed {
+        /// `true` for `UNIQUE PRIMARY INDEX`, `false` for plain `PRIMARY INDEX`.
+        unique: bool,
+        /// Optional index name, e.g. `PRIMARY INDEX my_idx (col)`.
+        name: Option<Ident>,
+        /// Index column list.
+        columns: Vec<Ident>,
+    },
+}
+
+impl fmt::Display for PrimaryIndex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PrimaryIndex::None => f.write_str("NO PRIMARY INDEX"),
+            PrimaryIndex::Indexed {
+                unique,
+                name,
+                columns,
+            } => {
+                if *unique {
+                    f.write_str("UNIQUE ")?;
+                }
+                f.write_str("PRIMARY INDEX")?;
+                if let Some(name) = name {
+                    write!(f, " {name}")?;
+                }
+                write!(f, " ({})", display_comma_separated(columns))
+            }
+        }
+    }
+}
+
+/// `WITH DATA` clause on `CREATE TABLE ... AS` statement.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum WithData {
+    /// `WITH DATA`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
+    Data,
+    /// `WITH NO DATA`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
+    NoData,
+    /// `WITH DATA AND STATISTICS`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
+    DataAndStatistics,
+}
+
+impl fmt::Display for WithData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            WithData::Data => "WITH DATA",
+            WithData::NoData => "WITH NO DATA",
+            WithData::DataAndStatistics => "WITH DATA AND STATISTICS",
+        })
     }
 }
 
