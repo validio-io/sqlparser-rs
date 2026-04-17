@@ -29,7 +29,8 @@ use crate::ast::{
     DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
     InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, PrimaryIndex, Query,
     RefreshModeKind, RowAccessPolicy, Statement, StorageLifecyclePolicy,
-    StorageSerializationPolicy, TableConstraint, TableVersion, Tag, WithData, WrappedCollection,
+    StorageSerializationPolicy, TableAttribute, TableConstraint, TableVersion, Tag, WithData,
+    WrappedCollection,
 };
 
 use crate::parser::ParserError;
@@ -185,8 +186,8 @@ pub struct CreateTableBuilder {
     pub backup: Option<bool>,
     /// `MULTISET | SET` table-kind prefix.
     pub multiset: Option<bool>,
-    /// `FALLBACK` clause.
-    pub fallback: Option<bool>,
+    /// Teradata comma-separated table attributes (e.g. `, NO FALLBACK, CHECKSUM = DEFAULT`).
+    pub table_attributes: Vec<TableAttribute>,
     /// `PRIMARY INDEX` clause.
     pub primary_index: Option<PrimaryIndex>,
     /// `WITH DATA` clause.
@@ -257,7 +258,7 @@ impl CreateTableBuilder {
             sortkey: None,
             backup: None,
             multiset: None,
-            fallback: None,
+            table_attributes: Vec::new(),
             primary_index: None,
             with_data: None,
         }
@@ -574,9 +575,9 @@ impl CreateTableBuilder {
         self.multiset = multiset;
         self
     }
-    /// Set `FALLBACK` / `NO FALLBACK` flag.
-    pub fn fallback(mut self, fallback: Option<bool>) -> Self {
-        self.fallback = fallback;
+    /// Set `table_attributes` list.
+    pub fn table_attributes(mut self, table_attributes: Vec<TableAttribute>) -> Self {
+        self.table_attributes = table_attributes;
         self
     }
     /// Set `PRIMARY INDEX` clause.
@@ -652,7 +653,7 @@ impl CreateTableBuilder {
             sortkey: self.sortkey,
             backup: self.backup,
             multiset: self.multiset,
-            fallback: self.fallback,
+            table_attributes: self.table_attributes,
             primary_index: self.primary_index,
             with_data: self.with_data,
         }
@@ -737,7 +738,7 @@ impl From<CreateTable> for CreateTableBuilder {
             sortkey: table.sortkey,
             backup: table.backup,
             multiset: table.multiset,
-            fallback: table.fallback,
+            table_attributes: table.table_attributes,
             primary_index: table.primary_index,
             with_data: table.with_data,
         }

@@ -3065,11 +3065,11 @@ pub struct CreateTable {
     ///
     /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/MULTISET-or-SET)
     pub multiset: Option<bool>,
-    /// `FALLBACK` clause.
-    /// `Some(true)` => `FALLBACK`, `Some(false)` => `NO FALLBACK`
+    /// Teradata comma-separated table attributes placed between
+    /// the table name and the column list.
     ///
-    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/FALLBACK-or-NO-FALLBACK)
-    pub fallback: Option<bool>,
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements)
+    pub table_attributes: Vec<TableAttribute>,
     /// `PRIMARY INDEX` clause.
     ///
     /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition)
@@ -3116,8 +3116,8 @@ impl fmt::Display for CreateTable {
             dynamic = if self.dynamic { "DYNAMIC " } else { "" },
             name = self.name,
         )?;
-        if let Some(fallback) = self.fallback {
-            write!(f, ", {}", if fallback { "FALLBACK" } else { "NO FALLBACK" })?;
+        for attr in &self.table_attributes {
+            write!(f, ", {attr}")?;
         }
         if let Some(partition_of) = &self.partition_of {
             write!(f, " PARTITION OF {partition_of}")?;
@@ -3485,6 +3485,239 @@ impl fmt::Display for WithData {
             WithData::Data => "WITH DATA",
             WithData::NoData => "WITH NO DATA",
             WithData::DataAndStatistics => "WITH DATA AND STATISTICS",
+        })
+    }
+}
+
+/// Table-level attributes in a `CREATE TABLE` statement.
+/// Comma-separated attribute list that sits between the table
+/// name and the column list.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum TableAttribute {
+    /// `FALLBACK` clause
+    /// `true` => `FALLBACK`, `false` => `NO FALLBACK`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/FALLBACK-or-NO-FALLBACK)
+    Fallback(bool),
+    /// `BEFORE JOURNAL` qualifier.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/BEFORE-JOURNAL)
+    BeforeJournal(BeforeJournalMode),
+    /// `AFTER JOURNAL` qualifier.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/AFTER-JOURNAL)
+    AfterJournal(AfterJournalMode),
+    /// `WITH JOURNAL TABLE = <name>`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/WITH-JOURNAL-TABLE)
+    WithJournalTable(ObjectName),
+    /// `CHECKSUM = <level>`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/ALTER-TABLE/ALTER-TABLE-Syntax-Elements/Table-Options/CHECKSUM)
+    Checksum(Ident),
+    /// `DEFAULT MERGEBLOCKRATIO` | `MERGEBLOCKRATIO = n [PERCENT]` | `NO MERGEBLOCKRATIO`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/Database-Design/Designing-Tables-for-Optimal-Performance/Adjusting-the-DATABLOCKSIZE-and-MERGEBLOCKRATIO-Table-Parameters)
+    MergeBlockRatio(MergeBlockRatio),
+    /// `DATABLOCKSIZE` clause.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/data_block_size)
+    DataBlockSize(DataBlockSize),
+    /// `FREESPACE = n [PERCENT]`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Detailed-Topics/CREATE-TABLE-Options/CREATE-TABLE-Table-Options-Clause/FREESPACE-PERCENT)
+    FreeSpace(Percentage),
+    /// `LOG` option.
+    /// `true` => `LOG`, `false` => `NO LOG`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Detailed-Topics/CREATE-TABLE-Options/CREATE-TABLE-Table-Options-Clause/LOG-and-NO-LOG)
+    Log(bool),
+}
+
+impl fmt::Display for TableAttribute {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TableAttribute::Fallback(true) => f.write_str("FALLBACK"),
+            TableAttribute::Fallback(false) => f.write_str("NO FALLBACK"),
+            TableAttribute::BeforeJournal(mode) => write!(f, "{mode}"),
+            TableAttribute::AfterJournal(mode) => write!(f, "{mode}"),
+            TableAttribute::WithJournalTable(name) => write!(f, "WITH JOURNAL TABLE = {name}"),
+            TableAttribute::Checksum(level) => write!(f, "CHECKSUM = {level}"),
+            TableAttribute::MergeBlockRatio(m) => write!(f, "{m}"),
+            TableAttribute::DataBlockSize(d) => write!(f, "{d}"),
+            TableAttribute::FreeSpace(p) => write!(f, "FREESPACE = {p}"),
+            TableAttribute::Log(true) => f.write_str("LOG"),
+            TableAttribute::Log(false) => f.write_str("NO LOG"),
+        }
+    }
+}
+
+/// `BEFORE JOURNAL` qualifier.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/BEFORE-JOURNAL)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum BeforeJournalMode {
+    /// `BEFORE JOURNAL`
+    Plain,
+    /// `NO BEFORE JOURNAL`
+    No,
+    /// `DUAL BEFORE JOURNAL`
+    Dual,
+}
+
+impl fmt::Display for BeforeJournalMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            BeforeJournalMode::Plain => "BEFORE JOURNAL",
+            BeforeJournalMode::No => "NO BEFORE JOURNAL",
+            BeforeJournalMode::Dual => "DUAL BEFORE JOURNAL",
+        })
+    }
+}
+
+/// `AFTER JOURNAL` qualifier.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/AFTER-JOURNAL)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum AfterJournalMode {
+    /// `AFTER JOURNAL`
+    Plain,
+    /// `NO AFTER JOURNAL`
+    No,
+    /// `DUAL AFTER JOURNAL`
+    Dual,
+    /// `LOCAL AFTER JOURNAL`
+    Local,
+    /// `NOT LOCAL AFTER JOURNAL`
+    NotLocal,
+}
+
+impl fmt::Display for AfterJournalMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            AfterJournalMode::Plain => "AFTER JOURNAL",
+            AfterJournalMode::No => "NO AFTER JOURNAL",
+            AfterJournalMode::Dual => "DUAL AFTER JOURNAL",
+            AfterJournalMode::Local => "LOCAL AFTER JOURNAL",
+            AfterJournalMode::NotLocal => "NOT LOCAL AFTER JOURNAL",
+        })
+    }
+}
+
+/// Numeric value with an optional `PERCENT` keyword suffix, e.g. `0` or `50 PERCENT`.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct Percentage {
+    /// Numeric value.
+    pub value: u64,
+    /// Whether the literal `PERCENT` keyword was present.
+    pub percent: bool,
+}
+
+impl fmt::Display for Percentage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.value)?;
+        if self.percent {
+            f.write_str(" PERCENT")?;
+        }
+        Ok(())
+    }
+}
+
+/// `MERGEBLOCKRATIO` clause.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/Database-Design/Designing-Tables-for-Optimal-Performance/Adjusting-the-DATABLOCKSIZE-and-MERGEBLOCKRATIO-Table-Parameters)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum MergeBlockRatio {
+    /// `DEFAULT MERGEBLOCKRATIO`
+    Default,
+    /// `NO MERGEBLOCKRATIO`
+    No,
+    /// `MERGEBLOCKRATIO = n [PERCENT]`
+    Value(Percentage),
+}
+
+impl fmt::Display for MergeBlockRatio {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MergeBlockRatio::Default => f.write_str("DEFAULT MERGEBLOCKRATIO"),
+            MergeBlockRatio::No => f.write_str("NO MERGEBLOCKRATIO"),
+            MergeBlockRatio::Value(p) => write!(f, "MERGEBLOCKRATIO = {p}"),
+        }
+    }
+}
+
+/// `DATABLOCKSIZE` clause.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/data_block_size)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DataBlockSize {
+    /// `MINIMUM DATABLOCKSIZE`
+    Minimum,
+    /// `MAXIMUM DATABLOCKSIZE`
+    Maximum,
+    /// `DEFAULT DATABLOCKSIZE`
+    Default,
+    /// `DATABLOCKSIZE = n [BYTES|KBYTES|KILOBYTES]`
+    Value {
+        /// Size value.
+        value: u64,
+        /// Optional unit
+        unit: Option<DataBlockUnit>,
+    },
+}
+
+impl fmt::Display for DataBlockSize {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DataBlockSize::Minimum => f.write_str("MINIMUM DATABLOCKSIZE"),
+            DataBlockSize::Maximum => f.write_str("MAXIMUM DATABLOCKSIZE"),
+            DataBlockSize::Default => f.write_str("DEFAULT DATABLOCKSIZE"),
+            DataBlockSize::Value { value, unit } => {
+                write!(f, "DATABLOCKSIZE = {value}")?;
+                if let Some(unit) = unit {
+                    write!(f, " {unit}")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Unit suffix for `DATABLOCKSIZE = n <unit>`.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/table_option/data_block_size)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum DataBlockUnit {
+    /// `BYTES`
+    Bytes,
+    /// `KBYTES`
+    KBytes,
+    /// `KILOBYTES`
+    Kilobytes,
+}
+
+impl fmt::Display for DataBlockUnit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            DataBlockUnit::Bytes => "BYTES",
+            DataBlockUnit::KBytes => "KBYTES",
+            DataBlockUnit::Kilobytes => "KILOBYTES",
         })
     }
 }

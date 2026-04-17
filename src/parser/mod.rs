@@ -8468,16 +8468,7 @@ impl<'a> Parser<'a> {
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;
 
-        let fallback = if self.dialect.supports_leading_comma_before_table_options() &&
-            self.consume_token(&Token::Comma) {
-            let fallback = self.maybe_parse_fallback()?;
-            if fallback.is_none() {
-                self.prev_token(); // Put back comma.
-            }
-            fallback
-        } else {
-            None
-        };
+        let table_attributes = self.maybe_parse_table_attributes()?;
 
         // PostgreSQL PARTITION OF for child partition tables
         // Note: This is a PostgreSQL-specific feature, but the dialect check was intentionally
@@ -8637,7 +8628,7 @@ impl<'a> Parser<'a> {
             .transient(transient)
             .volatile(volatile)
             .multiset(multiset)
-            .fallback(fallback)
+            .table_attributes(table_attributes)
             .hive_distribution(hive_distribution)
             .hive_formats(hive_formats)
             .global(global)
@@ -8676,7 +8667,54 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse `FALLBACK` option on a `CREATE TABLE` statement,
+    /// Parse a list of [`TableAttribute`]s.
+    fn maybe_parse_table_attributes(&mut self) -> Result<Vec<TableAttribute>, ParserError> {
+        if !self.dialect.supports_leading_comma_before_table_options() {
+            return Ok(Vec::new());
+        }
+        let mut attrs = Vec::new();
+        while matches!(self.peek_token_ref().token, Token::Comma) {
+            self.expect_token(&Token::Comma)?;
+            attrs.push(self.parse_table_attribute()?);
+        }
+        Ok(attrs)
+    }
+
+    /// Parse a [`TableAttribute`].
+    fn parse_table_attribute(&mut self) -> Result<TableAttribute, ParserError> {
+        if let Some(v) = self.maybe_parse_fallback()? {
+            return Ok(TableAttribute::Fallback(v));
+        }
+        if let Some(v) = self.maybe_parse_before_journal()? {
+            return Ok(TableAttribute::BeforeJournal(v));
+        }
+        if let Some(v) = self.maybe_parse_after_journal()? {
+            return Ok(TableAttribute::AfterJournal(v));
+        }
+        if let Some(v) = self.maybe_parse_with_journal_table()? {
+            return Ok(TableAttribute::WithJournalTable(v));
+        }
+        if let Some(v) = self.maybe_parse_checksum()? {
+            return Ok(TableAttribute::Checksum(v));
+        }
+        if let Some(v) = self.maybe_parse_merge_block_ratio()? {
+            return Ok(TableAttribute::MergeBlockRatio(v));
+        }
+        if let Some(v) = self.maybe_parse_data_block_size()? {
+            return Ok(TableAttribute::DataBlockSize(v));
+        }
+        if let Some(v) = self.maybe_parse_free_space()? {
+            return Ok(TableAttribute::FreeSpace(v));
+        }
+        if let Some(v) = self.maybe_parse_log()? {
+            return Ok(TableAttribute::Log(v));
+        }
+        self.expected("table attribute", self.peek_token().clone())
+    }
+
+    /// Parse `FALLBACK` clause in a `CREATE TABLE` statement.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/FALLBACK-or-NO-FALLBACK)
     fn maybe_parse_fallback(&mut self) -> Result<Option<bool>, ParserError> {
         if self.parse_keywords(&[Keyword::NO, Keyword::FALLBACK]) {
             Ok(Some(false))
@@ -8685,6 +8723,130 @@ impl<'a> Parser<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    /// Parse `BEFORE JOURNAL` clause in a `CREATE TABLE` statement.
+    fn maybe_parse_before_journal(&mut self) -> Result<Option<BeforeJournalMode>, ParserError> {
+        if self.parse_keywords(&[Keyword::NO, Keyword::BEFORE, Keyword::JOURNAL]) {
+            Ok(Some(BeforeJournalMode::No))
+        } else if self.parse_keywords(&[Keyword::DUAL, Keyword::BEFORE, Keyword::JOURNAL]) {
+            Ok(Some(BeforeJournalMode::Dual))
+        } else if self.parse_keywords(&[Keyword::BEFORE, Keyword::JOURNAL]) {
+            Ok(Some(BeforeJournalMode::Plain))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse `AFTER JOURNAL` clause in a `CREATE TABLE` statement.
+    fn maybe_parse_after_journal(&mut self) -> Result<Option<AfterJournalMode>, ParserError> {
+        if self.parse_keywords(&[
+            Keyword::NOT,
+            Keyword::LOCAL,
+            Keyword::AFTER,
+            Keyword::JOURNAL,
+        ]) {
+            Ok(Some(AfterJournalMode::NotLocal))
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::AFTER, Keyword::JOURNAL]) {
+            Ok(Some(AfterJournalMode::No))
+        } else if self.parse_keywords(&[Keyword::DUAL, Keyword::AFTER, Keyword::JOURNAL]) {
+            Ok(Some(AfterJournalMode::Dual))
+        } else if self.parse_keywords(&[Keyword::LOCAL, Keyword::AFTER, Keyword::JOURNAL]) {
+            Ok(Some(AfterJournalMode::Local))
+        } else if self.parse_keywords(&[Keyword::AFTER, Keyword::JOURNAL]) {
+            Ok(Some(AfterJournalMode::Plain))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse `WITH JOURNAL TABLE` clause in a `CREATE TABLE` statement.
+    fn maybe_parse_with_journal_table(&mut self) -> Result<Option<ObjectName>, ParserError> {
+        if !self.parse_keywords(&[Keyword::WITH, Keyword::JOURNAL, Keyword::TABLE]) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::Eq)?;
+        self.parse_object_name(false).map(Some)
+    }
+
+    /// Parse `CHECKSUM` clause in a `CREATE TABLE` statement.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/ALTER-TABLE/ALTER-TABLE-Syntax-Elements/Table-Options/CHECKSUM)
+    fn maybe_parse_checksum(&mut self) -> Result<Option<Ident>, ParserError> {
+        if !self.parse_keyword(Keyword::CHECKSUM) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::Eq)?;
+        self.parse_identifier().map(Some)
+    }
+
+    /// Parse `MERGEBLOCKRATIO` clause in a `CREATE TABLE` statement.
+    fn maybe_parse_merge_block_ratio(&mut self) -> Result<Option<MergeBlockRatio>, ParserError> {
+        if self.parse_keywords(&[Keyword::DEFAULT, Keyword::MERGEBLOCKRATIO]) {
+            Ok(Some(MergeBlockRatio::Default))
+        } else if self.parse_keywords(&[Keyword::NO, Keyword::MERGEBLOCKRATIO]) {
+            Ok(Some(MergeBlockRatio::No))
+        } else if self.parse_keyword(Keyword::MERGEBLOCKRATIO) {
+            self.expect_token(&Token::Eq)?;
+            Ok(Some(MergeBlockRatio::Value(self.parse_percentage()?)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse `DATABLOCKSIZE` clause in a `CREATE TABLE` statement.
+    fn maybe_parse_data_block_size(&mut self) -> Result<Option<DataBlockSize>, ParserError> {
+        if self.parse_keywords(&[Keyword::MINIMUM, Keyword::DATABLOCKSIZE]) {
+            Ok(Some(DataBlockSize::Minimum))
+        } else if self.parse_keywords(&[Keyword::MAXIMUM, Keyword::DATABLOCKSIZE]) {
+            Ok(Some(DataBlockSize::Maximum))
+        } else if self.parse_keywords(&[Keyword::DEFAULT, Keyword::DATABLOCKSIZE]) {
+            Ok(Some(DataBlockSize::Default))
+        } else if self.parse_keyword(Keyword::DATABLOCKSIZE) {
+            self.expect_token(&Token::Eq)?;
+            let value = self.parse_literal_uint()?;
+            let unit = if self.parse_keyword(Keyword::BYTES) {
+                Some(DataBlockUnit::Bytes)
+            } else if self.parse_keyword(Keyword::KBYTES) {
+                Some(DataBlockUnit::KBytes)
+            } else if self.parse_keyword(Keyword::KILOBYTES) {
+                Some(DataBlockUnit::Kilobytes)
+            } else {
+                None
+            };
+            Ok(Some(DataBlockSize::Value { value, unit }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse `FREESPACE` clause in a `CREATE TABLE` statement.
+    fn maybe_parse_free_space(&mut self) -> Result<Option<Percentage>, ParserError> {
+        if !self.parse_keyword(Keyword::FREESPACE) {
+            return Ok(None);
+        }
+        self.expect_token(&Token::Eq)?;
+        self.parse_percentage().map(Some)
+    }
+
+    /// Parse `LOG` clause in a `CREATE TABLE` statement.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Detailed-Topics/CREATE-TABLE-Options/CREATE-TABLE-Table-Options-Clause/LOG-and-NO-LOG)
+    fn maybe_parse_log(&mut self) -> Result<Option<bool>, ParserError> {
+        if self.parse_keywords(&[Keyword::NO, Keyword::LOG]) {
+            Ok(Some(false))
+        } else if self.parse_keyword(Keyword::LOG) {
+            Ok(Some(true))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse a [`Percentage`] value (an integer with an optional `PERCENT` suffix).
+    fn parse_percentage(&mut self) -> Result<Percentage, ParserError> {
+        let value = self.parse_literal_uint()?;
+        let percent = self.parse_keyword(Keyword::PERCENT);
+        Ok(Percentage { value, percent })
     }
 
     /// Parse [`WithData`] clause on `CREATE TABLE ... AS` statement.

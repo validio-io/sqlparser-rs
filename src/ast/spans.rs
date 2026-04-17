@@ -598,7 +598,7 @@ impl Spanned for CreateTable {
             sortkey: _,
             backup: _,
             multiset: _,
-            fallback: _,
+            table_attributes: _,
             primary_index: _,
             with_data: _,
         } = self;

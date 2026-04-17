@@ -99,9 +99,62 @@ fn parse_create_table_as_with_data() {
 }
 
 #[test]
-fn parse_create_table_options() {
+fn parse_create_table_journal() {
+    teradata().verified_stmt("CREATE TABLE foo, BEFORE JOURNAL (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, NO BEFORE JOURNAL (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, DUAL BEFORE JOURNAL (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, AFTER JOURNAL (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, NO AFTER JOURNAL (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, DUAL AFTER JOURNAL (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, LOCAL AFTER JOURNAL (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, NOT LOCAL AFTER JOURNAL (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, WITH JOURNAL TABLE = jlog (id INT)");
+}
+
+#[test]
+fn parse_create_table_checksum() {
+    for level in ["DEFAULT", "ON", "OFF", "IMMEDIATE"] {
+        teradata().verified_stmt(&format!("CREATE TABLE foo, CHECKSUM = {level} (id INT)"));
+    }
+}
+
+#[test]
+fn parse_create_table_merge_block_ratio() {
+    teradata().verified_stmt("CREATE TABLE foo, DEFAULT MERGEBLOCKRATIO (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, NO MERGEBLOCKRATIO (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, MERGEBLOCKRATIO = 60 (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, MERGEBLOCKRATIO = 60 PERCENT (id INT)");
+}
+
+#[test]
+fn parse_create_table_data_block_size() {
+    teradata().verified_stmt("CREATE TABLE foo, MINIMUM DATABLOCKSIZE (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, MAXIMUM DATABLOCKSIZE (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, DEFAULT DATABLOCKSIZE (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, DATABLOCKSIZE = 12582912 (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, DATABLOCKSIZE = 12582912 BYTES (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, DATABLOCKSIZE = 12 KBYTES (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, DATABLOCKSIZE = 12 KILOBYTES (id INT)");
+}
+
+#[test]
+fn parse_create_table_free_space() {
+    teradata().verified_stmt("CREATE TABLE foo, FREESPACE = 0 (id INT)");
+    teradata().verified_stmt("CREATE TABLE foo, FREESPACE = 5 PERCENT (id INT)");
+}
+
+#[test]
+fn parse_create_table_log() {
+    teradata().verified_stmt("CREATE TABLE foo, LOG (id INT)");
+    teradata().verified_stmt("CREATE VOLATILE TABLE foo, NO LOG (id INT)");
+}
+
+#[test]
+fn parse_create_table_combined() {
     teradata().verified_stmt(concat!(
-        "CREATE MULTISET VOLATILE TABLE foo, NO FALLBACK ",
+        "CREATE MULTISET VOLATILE TABLE foo, NO FALLBACK, NO BEFORE JOURNAL, ",
+        "NO AFTER JOURNAL, CHECKSUM = DEFAULT, DEFAULT MERGEBLOCKRATIO, ",
+        "DATABLOCKSIZE = 12582912 BYTES, FREESPACE = 0 PERCENT ",
         "(id INT, name VARCHAR(100)) ",
         "UNIQUE PRIMARY INDEX (id) ",
         "ON COMMIT PRESERVE ROWS"

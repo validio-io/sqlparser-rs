@@ -6689,7 +6689,7 @@ fn parse_trigger_related_functions() {
             sortkey: None,
             backup: None,
             multiset: None,
-            fallback: None,
+            table_attributes: vec![],
             primary_index: None,
             with_data: None,
         }

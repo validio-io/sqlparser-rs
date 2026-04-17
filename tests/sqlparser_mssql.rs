@@ -2013,7 +2013,7 @@ fn parse_create_table_with_valid_options() {
                 sortkey: None,
                 backup: None,
                 multiset: None,
-                fallback: None,
+                table_attributes: vec![],
                 primary_index: None,
                 with_data: None,
             })
@@ -2191,7 +2191,7 @@ fn parse_create_table_with_identity_column() {
                 sortkey: None,
                 backup: None,
                 multiset: None,
-                fallback: None,
+                table_attributes: vec![],
                 primary_index: None,
                 with_data: None,
             }),
