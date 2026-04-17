@@ -837,6 +837,13 @@ impl Spanned for ColumnOption {
             ColumnOption::Tags(..) => Span::empty(),
             ColumnOption::Srid(..) => Span::empty(),
             ColumnOption::Invisible => Span::empty(),
+            ColumnOption::Compress(_) => Span::empty(),
+            ColumnOption::CaseSpecific(_) => Span::empty(),
+            ColumnOption::Uppercase(_) => Span::empty(),
+            ColumnOption::Format(_) => Span::empty(),
+            ColumnOption::Title(_) => Span::empty(),
+            ColumnOption::Named(ident) => ident.span,
+            ColumnOption::WithDefault => Span::empty(),
         }
     }
 }

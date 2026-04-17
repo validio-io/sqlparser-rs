@@ -9631,6 +9631,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_optional_column_option_inner(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if let Some(o) = self.maybe_parse_compress()? {
+            return Ok(Some(o));
+        }
+        if let Some(o) = self.maybe_parse_case_specific()? {
+            return Ok(Some(o));
+        }
+        if let Some(o) = self.maybe_parse_uppercase()? {
+            return Ok(Some(o));
+        }
+        if let Some(o) = self.maybe_parse_format()? {
+            return Ok(Some(o));
+        }
+        if let Some(o) = self.maybe_parse_title()? {
+            return Ok(Some(o));
+        }
+        if let Some(o) = self.maybe_parse_named()? {
+            return Ok(Some(o));
+        }
+        if let Some(o) = self.maybe_parse_with_default()? {
+            return Ok(Some(o));
+        }
         if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET]) {
             Ok(Some(ColumnOption::CharacterSet(
                 self.parse_object_name(false)?,
@@ -9861,6 +9882,96 @@ impl<'a> Parser<'a> {
             )))
         } else if self.parse_keyword(Keyword::INVISIBLE) {
             Ok(Some(ColumnOption::Invisible))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse Teradata `COMPRESS` column-level clause.
+    fn maybe_parse_compress(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if self.parse_keywords(&[Keyword::NO, Keyword::COMPRESS]) {
+            return Ok(Some(ColumnOption::Compress(CompressOption::No)));
+        }
+        if self.parse_keywords(&[Keyword::AUTO, Keyword::COMPRESS]) {
+            return Ok(Some(ColumnOption::Compress(CompressOption::Auto)));
+        }
+
+        if !self.parse_keyword(Keyword::COMPRESS) {
+            return Ok(None);
+        }
+
+        if self.parse_keyword(Keyword::USING) {
+            let compress = self.parse_object_name(false)?;
+            let decompress = if self.parse_keywords(&[Keyword::DECOMPRESS, Keyword::USING]) {
+                Some(self.parse_object_name(false)?)
+            } else {
+                None
+            };
+            return Ok(Some(ColumnOption::Compress(CompressOption::Using {
+                compress,
+                decompress,
+            })));
+        }
+
+        if self.consume_token(&Token::LParen) {
+            let values = self.parse_comma_separated(|p| p.parse_expr())?;
+            self.expect_token(&Token::RParen)?;
+            return Ok(Some(ColumnOption::Compress(CompressOption::Values(values))));
+        }
+
+        Ok(Some(ColumnOption::Compress(CompressOption::Default)))
+    }
+
+    /// Parse `CASESPECIFIC` column option.
+    fn maybe_parse_case_specific(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if self.parse_keyword(Keyword::CASESPECIFIC) {
+            Ok(Some(ColumnOption::CaseSpecific(true)))
+        } else if self.parse_keywords(&[Keyword::NOT, Keyword::CASESPECIFIC]) {
+            Ok(Some(ColumnOption::CaseSpecific(false)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse `UPPERCASE` column option.
+    fn maybe_parse_uppercase(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if self.parse_keyword(Keyword::UPPERCASE) {
+            Ok(Some(ColumnOption::Uppercase(true)))
+        } else if self.parse_keywords(&[Keyword::NOT, Keyword::UPPERCASE]) {
+            Ok(Some(ColumnOption::Uppercase(false)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse `FORMAT '<text>'` column option.
+    fn maybe_parse_format(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if !self.parse_keyword(Keyword::FORMAT) {
+            return Ok(None);
+        }
+        Ok(Some(ColumnOption::Format(self.parse_value()?)))
+    }
+
+    /// Parse `TITLE '<text>'` column option
+    fn maybe_parse_title(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if !self.parse_keyword(Keyword::TITLE) {
+            return Ok(None);
+        }
+        Ok(Some(ColumnOption::Title(self.parse_value()?)))
+    }
+
+    /// Parse `NAMED <ident>` column option.
+    fn maybe_parse_named(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if !self.parse_keyword(Keyword::NAMED) {
+            return Ok(None);
+        }
+        Ok(Some(ColumnOption::Named(self.parse_identifier()?)))
+    }
+
+    /// Parse `WITH DEFAULT` column option.
+    fn maybe_parse_with_default(&mut self) -> Result<Option<ColumnOption>, ParserError> {
+        if self.parse_keywords(&[Keyword::WITH, Keyword::DEFAULT]) {
+            Ok(Some(ColumnOption::WithDefault))
         } else {
             Ok(None)
         }

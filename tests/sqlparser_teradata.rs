@@ -229,6 +229,40 @@ fn parse_case_n() {
 }
 
 #[test]
+fn parse_create_table_column_options() {
+    // COMPRESS family
+    teradata().verified_stmt("CREATE TABLE t (a INT COMPRESS)");
+    teradata().verified_stmt("CREATE TABLE t (a INT NO COMPRESS)");
+    teradata().verified_stmt("CREATE TABLE t (a INT AUTO COMPRESS)");
+    teradata().verified_stmt("CREATE TABLE t (a INT COMPRESS (1, 2, 3))");
+    teradata().verified_stmt("CREATE TABLE t (a INT COMPRESS USING zlib)");
+    teradata().verified_stmt("CREATE TABLE t (a INT COMPRESS USING zlib DECOMPRESS USING unzlib)");
+    // CASESPECIFIC
+    teradata().verified_stmt("CREATE TABLE t (a VARCHAR(10) CASESPECIFIC)");
+    teradata().verified_stmt("CREATE TABLE t (a VARCHAR(10) NOT CASESPECIFIC)");
+    // UPPERCASE
+    teradata().verified_stmt("CREATE TABLE t (a VARCHAR(10) UPPERCASE)");
+    teradata().verified_stmt("CREATE TABLE t (a VARCHAR(10) NOT UPPERCASE)");
+    // FORMAT
+    teradata().verified_stmt("CREATE TABLE t (a DATE FORMAT 'YYYY-MM-DD')");
+    // TITLE
+    teradata().verified_stmt("CREATE TABLE t (a INT TITLE 'The Column')");
+    // NAMED
+    teradata().verified_stmt("CREATE TABLE t (a INT NAMED other_name)");
+    // WITH DEFAULT
+    teradata().verified_stmt("CREATE TABLE t (a INT WITH DEFAULT)");
+    // Combined
+    teradata().verified_stmt(concat!(
+        "CREATE TABLE t (",
+        "a INT NOT NULL COMPRESS (1, 2, 3), ",
+        "b VARCHAR(10) CHARACTER SET LATIN CASESPECIFIC, ",
+        "c DATE FORMAT 'YYYY-MM-DD' TITLE 'Birth Date', ",
+        "d INT AUTO COMPRESS NAMED other_d",
+        ")"
+    ));
+}
+
+#[test]
 fn parse_create_table_combined() {
     teradata().verified_stmt(concat!(
         "CREATE MULTISET VOLATILE TABLE foo, NO FALLBACK, NO BEFORE JOURNAL, ",

@@ -2001,6 +2001,34 @@ pub enum ColumnOption {
     /// ```
     /// [MySQL]: https://dev.mysql.com/doc/refman/8.4/en/invisible-columns.html
     Invisible,
+    /// `COMPRESS` column-level clause.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Types-and-Literals/Data-Type-Phrases-and-Attributes/Data-Type-Attribute-Declarations/COMPRESS-Phrase)
+    Compress(CompressOption),
+    /// `CASESPECIFIC` / `NOT CASESPECIFIC` — `true` for `CASESPECIFIC`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Types-and-Literals/Data-Type-Phrases-and-Attributes/Data-Type-Attribute-Declarations/CASESPECIFIC-Phrase)
+    CaseSpecific(bool),
+    /// `UPPERCASE` / `NOT UPPERCASE` — `true` for `UPPERCASE`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Types-and-Literals/Data-Type-Phrases-and-Attributes/Data-Type-Attribute-Declarations/UPPERCASE-Phrase)
+    Uppercase(bool),
+    /// `FORMAT '<text>'`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Types-and-Literals/Data-Type-Phrases-and-Attributes/Data-Type-Attribute-Declarations/FORMAT-Phrase)
+    Format(ValueWithSpan),
+    /// `TITLE '<text>'`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Types-and-Literals/Data-Type-Phrases-and-Attributes/Data-Type-Attribute-Declarations/TITLE-Phrase)
+    Title(ValueWithSpan),
+    /// `NAMED <ident>`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Types-and-Literals/Data-Type-Phrases-and-Attributes/Data-Type-Attribute-Declarations/NAMED-Phrase)
+    Named(Ident),
+    /// `WITH DEFAULT`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Types-and-Literals/Data-Type-Phrases-and-Attributes/Data-Type-Attribute-Declarations/DEFAULT-and-WITH-DEFAULT-Phrases)
+    WithDefault,
 }
 
 impl From<UniqueConstraint> for ColumnOption {
@@ -2149,6 +2177,62 @@ impl fmt::Display for ColumnOption {
             }
             Invisible => {
                 write!(f, "INVISIBLE")
+            }
+            Compress(c) => write!(f, "{c}"),
+            CaseSpecific(true) => f.write_str("CASESPECIFIC"),
+            CaseSpecific(false) => f.write_str("NOT CASESPECIFIC"),
+            Uppercase(true) => f.write_str("UPPERCASE"),
+            Uppercase(false) => f.write_str("NOT UPPERCASE"),
+            Format(v) => write!(f, "FORMAT {v}"),
+            Title(v) => write!(f, "TITLE {v}"),
+            Named(name) => write!(f, "NAMED {name}"),
+            WithDefault => f.write_str("WITH DEFAULT"),
+        }
+    }
+}
+
+/// Teradata `COMPRESS` column-level clause.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Types-and-Literals/Data-Type-Phrases-and-Attributes/Data-Type-Attribute-Declarations/COMPRESS-Phrase)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CompressOption {
+    /// `COMPRESS` (bare)
+    Default,
+    /// `NO COMPRESS`
+    No,
+    /// `AUTO COMPRESS`
+    Auto,
+    /// `COMPRESS (<value>[, <value>]*)`
+    Values(Vec<Expr>),
+    /// `COMPRESS USING <fn> [DECOMPRESS USING <fn>]`
+    Using {
+        /// Compression function name.
+        compress: ObjectName,
+        /// Optional decompression function name.
+        decompress: Option<ObjectName>,
+    },
+}
+
+impl fmt::Display for CompressOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CompressOption::Default => f.write_str("COMPRESS"),
+            CompressOption::No => f.write_str("NO COMPRESS"),
+            CompressOption::Auto => f.write_str("AUTO COMPRESS"),
+            CompressOption::Values(vs) => {
+                write!(f, "COMPRESS ({})", display_comma_separated(vs))
+            }
+            CompressOption::Using {
+                compress,
+                decompress,
+            } => {
+                write!(f, "COMPRESS USING {compress}")?;
+                if let Some(d) = decompress {
+                    write!(f, " DECOMPRESS USING {d}")?;
+                }
+                Ok(())
             }
         }
     }
