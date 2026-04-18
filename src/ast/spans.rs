@@ -548,6 +548,7 @@ impl Spanned for CreateTable {
             volatile: _,      // bool
             iceberg: _,       // bool, Snowflake specific
             snapshot: _,      // bool, BigQuery specific
+            join_index: _,
             name,
             columns,
             constraints,

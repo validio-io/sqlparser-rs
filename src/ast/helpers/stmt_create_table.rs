@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
-use crate::ast::ddl::CreateTableOnCommit;
+use crate::ast::ddl::{CreateTableOnCommit, CreateTablePartitionBy};
 use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions,
     CreateTableQuery, DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat,
@@ -83,6 +83,8 @@ pub struct CreateTableBuilder {
     pub iceberg: bool,
     /// `SNAPSHOT` table flag.
     pub snapshot: bool,
+    /// `JOIN INDEX` flag.
+    pub join_index: bool,
     /// Whether `DYNAMIC` table option is set.
     pub dynamic: bool,
     /// The table name.
@@ -122,7 +124,7 @@ pub struct CreateTableBuilder {
     /// Optional `ORDER BY` for clustering/sorting.
     pub order_by: Option<OneOrManyWithParens<Expr>>,
     /// Optional `PARTITION BY` expression.
-    pub partition_by: Option<Box<Expr>>,
+    pub partition_by: Option<CreateTablePartitionBy>,
     /// Optional `CLUSTER BY` expressions.
     pub cluster_by: Option<WrappedCollection<Vec<Expr>>>,
     /// Optional `CLUSTERED BY` clause.
@@ -206,6 +208,7 @@ impl CreateTableBuilder {
             volatile: false,
             iceberg: false,
             snapshot: false,
+            join_index: false,
             dynamic: false,
             name,
             columns: vec![],
@@ -307,6 +310,11 @@ impl CreateTableBuilder {
         self.snapshot = snapshot;
         self
     }
+    /// Set `JOIN INDEX` flag.
+    pub fn join_index(mut self, join_index: bool) -> Self {
+        self.join_index = join_index;
+        self
+    }
     /// Set `DYNAMIC` table option.
     pub fn dynamic(mut self, dynamic: bool) -> Self {
         self.dynamic = dynamic;
@@ -399,7 +407,7 @@ impl CreateTableBuilder {
         self
     }
     /// Set `PARTITION BY` expression.
-    pub fn partition_by(mut self, partition_by: Option<Box<Expr>>) -> Self {
+    pub fn partition_by(mut self, partition_by: Option<CreateTablePartitionBy>) -> Self {
         self.partition_by = partition_by;
         self
     }
@@ -601,6 +609,7 @@ impl CreateTableBuilder {
             volatile: self.volatile,
             iceberg: self.iceberg,
             snapshot: self.snapshot,
+            join_index: self.join_index,
             dynamic: self.dynamic,
             name: self.name,
             columns: self.columns,
@@ -686,6 +695,7 @@ impl From<CreateTable> for CreateTableBuilder {
             volatile: table.volatile,
             iceberg: table.iceberg,
             snapshot: table.snapshot,
+            join_index: table.join_index,
             dynamic: table.dynamic,
             name: table.name,
             columns: table.columns,
@@ -747,7 +757,7 @@ impl From<CreateTable> for CreateTableBuilder {
 /// Helper return type when parsing configuration for a `CREATE TABLE` statement.
 #[derive(Default)]
 pub(crate) struct CreateTableConfiguration {
-    pub partition_by: Option<Box<Expr>>,
+    pub partition_by: Option<CreateTablePartitionBy>,
     pub cluster_by: Option<WrappedCollection<Vec<Expr>>>,
     pub inherits: Option<Vec<ObjectName>>,
     pub table_options: CreateTableOptions,

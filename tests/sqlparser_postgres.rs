@@ -5674,7 +5674,11 @@ fn parse_create_table_with_partition_by() {
                 ],
                 create_table.columns
             );
-            match *create_table.partition_by.unwrap() {
+            let partition_expr = match create_table.partition_by.unwrap() {
+                CreateTablePartitionBy::BeforeQuery(expr) => *expr,
+                CreateTablePartitionBy::AfterQuery(_) => unreachable!(),
+            };
+            match partition_expr {
                 Expr::Function(f) => {
                     assert_eq!("RANGE", f.name.to_string());
                     assert_eq!(
@@ -6622,6 +6626,7 @@ fn parse_trigger_related_functions() {
             volatile: false,
             iceberg: false,
             snapshot: false,
+            join_index: false,
             name: ObjectName::from(vec![Ident::new("emp")]),
             columns: vec![
                 ColumnDef {

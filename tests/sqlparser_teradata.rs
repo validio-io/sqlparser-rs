@@ -362,3 +362,17 @@ fn parse_create_view_with_check_option() {
         "REPLACE RECURSIVE VIEW foo AS SELECT a FROM bar WITH CASCADED CHECK OPTION",
     );
 }
+
+#[test]
+fn parse_create_join_index() {
+    teradata().verified_stmt("CREATE JOIN INDEX ji AS SELECT a, b FROM t");
+    teradata().verified_stmt("CREATE JOIN INDEX ji AS SELECT a, b FROM t PRIMARY INDEX (a)");
+    teradata().verified_stmt("CREATE JOIN INDEX ji AS SELECT a FROM t NO PRIMARY INDEX");
+    teradata().verified_stmt("CREATE JOIN INDEX ji AS SELECT a FROM t UNIQUE PRIMARY INDEX (a)");
+    teradata().verified_stmt("CREATE JOIN INDEX ji AS SELECT a FROM t PARTITION BY a");
+    teradata().verified_stmt("CREATE JOIN INDEX ji AS SELECT a FROM t INDEX (a) INDEX (b)");
+    teradata().verified_stmt(concat!(
+        "CREATE JOIN INDEX ji, FALLBACK, CHECKSUM = ON ",
+        "AS SELECT a FROM t PRIMARY INDEX (a)"
+    ));
+}

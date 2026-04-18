@@ -16,6 +16,14 @@
 // under the License.
 
 use crate::dialect::Dialect;
+use crate::keywords::Keyword;
+use crate::parser::Parser;
+
+/// Additional reserved table aliases in Teradata.
+const RESERVED_FOR_TABLE_ALIAS: &[Keyword] = &[
+    // NO is a keyword in teradata.
+    Keyword::NO,
+];
 
 /// A [`Dialect`] for [Teradata](https://docs.teradata.com/).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -23,6 +31,10 @@ use crate::dialect::Dialect;
 pub struct TeradataDialect;
 
 impl Dialect for TeradataDialect {
+    fn is_table_factor_alias(&self, explicit: bool, kw: &Keyword, parser: &mut Parser) -> bool {
+        explicit || (!RESERVED_FOR_TABLE_ALIAS.contains(kw) && self.is_table_alias(kw, parser))
+    }
+
     /// See <https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Fundamentals/Basic-SQL-Syntax/Object-Names>
     fn identifier_quote_style(&self, _identifier: &str) -> Option<char> {
         Some('"')

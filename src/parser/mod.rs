@@ -5169,8 +5169,15 @@ impl<'a> Parser<'a> {
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(or_replace, temporary, global, transient, volatile, multiset)
-                .map(Into::into)
+            self.parse_create_table(
+                or_replace, temporary, global, transient, volatile, multiset, false,
+            )
+            .map(Into::into)
+        } else if self.parse_keywords(&[Keyword::JOIN, Keyword::INDEX]) {
+            self.parse_create_table(
+                or_replace, temporary, global, transient, volatile, multiset, true,
+            )
+            .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
@@ -8520,6 +8527,7 @@ impl<'a> Parser<'a> {
         transient: bool,
         volatile: bool,
         multiset: Option<bool>,
+        join_index: bool,
     ) -> Result<CreateTable, ParserError> {
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -8671,6 +8679,13 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let partition_by = if create_table_config.partition_by.is_some() {
+            create_table_config.partition_by
+        } else {
+            self.maybe_parse_partition_by()?
+                .map(CreateTablePartitionBy::AfterQuery)
+        };
+
         let mut constraints_after_columns_list = vec![];
         while let Some(cons) = self.parse_optional_table_constraint()? {
             constraints_after_columns_list.push(cons);
@@ -8692,6 +8707,7 @@ impl<'a> Parser<'a> {
             .transient(transient)
             .volatile(volatile)
             .multiset(multiset)
+            .join_index(join_index)
             .table_attributes(table_attributes)
             .hive_distribution(hive_distribution)
             .hive_formats(hive_formats)
@@ -8705,7 +8721,7 @@ impl<'a> Parser<'a> {
             .on_commit(on_commit)
             .on_cluster(on_cluster)
             .clustered_by(clustered_by)
-            .partition_by(create_table_config.partition_by)
+            .partition_by(partition_by)
             .cluster_by(create_table_config.cluster_by)
             .inherits(create_table_config.inherits)
             .partition_of(partition_of)
@@ -9219,9 +9235,9 @@ impl<'a> Parser<'a> {
             table_options = CreateTableOptions::TableProperties(table_properties);
         }
         let partition_by = if dialect_of!(self is BigQueryDialect | PostgreSqlDialect | GenericDialect | TeradataDialect)
-            && self.parse_keywords(&[Keyword::PARTITION, Keyword::BY])
         {
-            Some(Box::new(self.parse_expr()?))
+            self.maybe_parse_partition_by()?
+                .map(CreateTablePartitionBy::BeforeQuery)
         } else {
             None
         };
@@ -9255,6 +9271,14 @@ impl<'a> Parser<'a> {
             inherits,
             table_options,
         })
+    }
+
+    fn maybe_parse_partition_by(&mut self) -> Result<Option<Box<Expr>>, ParserError> {
+        if self.parse_keywords(&[Keyword::PARTITION, Keyword::BY]) {
+            Ok(Some(Box::new(self.parse_expr()?)))
+        } else {
+            Ok(None)
+        }
     }
 
     fn parse_plain_option(&mut self) -> Result<Option<SqlOption>, ParserError> {

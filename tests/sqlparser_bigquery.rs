@@ -541,7 +541,9 @@ fn parse_create_table_with_options() {
             );
             assert_eq!(
                 (
-                    Some(Box::new(Expr::Identifier(Ident::new("_PARTITIONDATE")))),
+                    Some(CreateTablePartitionBy::BeforeQuery(Box::new(
+                        Expr::Identifier(Ident::new("_PARTITIONDATE"))
+                    ))),
                     Some(WrappedCollection::NoWrapping(vec![
                         Expr::Identifier(Ident::new("userid")),
                         Expr::Identifier(Ident::new("age")),

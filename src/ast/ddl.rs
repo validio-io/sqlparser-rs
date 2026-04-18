@@ -3000,6 +3000,22 @@ pub enum CreateTableOnCommit {
     AfterQuery(OnCommit),
 }
 
+/// `PARTITION BY <expr>` clause on a `CREATE TABLE` statement along with
+/// positional context within the query.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateTablePartitionBy {
+    /// `CREATE TABLE t (...) PARTITION BY <expr> AS SELECT ...`
+    ///
+    /// [BigQuery](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#partition_expression)
+    BeforeQuery(Box<Expr>),
+    /// `CREATE JOIN INDEX ji AS SELECT ... PARTITION BY <expr>`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Join-and-Hash-Index-Statements/CREATE-JOIN-INDEX)
+    AfterQuery(Box<Expr>),
+}
+
 /// CREATE TABLE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3026,6 +3042,10 @@ pub struct CreateTable {
     /// `SNAPSHOT` clause
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_snapshot_table_statement>
     pub snapshot: bool,
+    /// `CREATE JOIN INDEX` instead of `CREATE TABLE`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Join-and-Hash-Index-Statements/CREATE-JOIN-INDEX)
+    pub join_index: bool,
     /// Table name
     #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
     pub name: ObjectName,
@@ -3083,9 +3103,8 @@ pub struct CreateTable {
     /// than empty (represented as ()), the latter meaning "no sorting".
     /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
     pub order_by: Option<OneOrManyWithParens<Expr>>,
-    /// BigQuery: A partition expression for the table.
-    /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#partition_expression>
-    pub partition_by: Option<Box<Expr>>,
+    /// `PARTITION BY <expr>` clause.
+    pub partition_by: Option<CreateTablePartitionBy>,
     /// BigQuery: Table clustering column list.
     /// <https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#table_option_list>
     /// Snowflake: Table clustering list which contains base column, expressions on base columns.
@@ -3210,10 +3229,11 @@ impl fmt::Display for CreateTable {
         //   `CREATE TABLE t (a INT) AS SELECT a from t2`
         write!(
             f,
-            "CREATE {or_replace}{external}{global}{multiset}{temporary}{transient}{volatile}{dynamic}{iceberg}{snapshot}TABLE {if_not_exists}{name}",
+            "CREATE {or_replace}{external}{global}{multiset}{temporary}{transient}{volatile}{dynamic}{iceberg}{snapshot}{verb} {if_not_exists}{name}",
             or_replace = if self.or_replace { "OR REPLACE " } else { "" },
             external = if self.external { "EXTERNAL " } else { "" },
             snapshot = if self.snapshot { "SNAPSHOT " } else { "" },
+            verb = if self.join_index { "JOIN INDEX" } else { "TABLE" },
             global = self.global
                 .map(|global| {
                     if global {
@@ -3386,7 +3406,8 @@ impl fmt::Display for CreateTable {
         if let Some(inherits) = &self.inherits {
             write!(f, " INHERITS ({})", display_comma_separated(inherits))?;
         }
-        if let Some(partition_by) = self.partition_by.as_ref() {
+        if let Some(CreateTablePartitionBy::BeforeQuery(partition_by)) = self.partition_by.as_ref()
+        {
             write!(f, " PARTITION BY {partition_by}")?;
         }
         if let Some(cluster_by) = self.cluster_by.as_ref() {
@@ -3517,6 +3538,9 @@ impl fmt::Display for CreateTable {
         }
         if let Some(with_data) = &self.with_data {
             write!(f, " {with_data}")?;
+        }
+        if let Some(CreateTablePartitionBy::AfterQuery(partition_by)) = self.partition_by.as_ref() {
+            write!(f, " PARTITION BY {partition_by}")?;
         }
         if !self.constraints_after_columns_list.is_empty() {
             write!(f, " ")?;
