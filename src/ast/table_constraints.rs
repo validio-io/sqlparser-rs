@@ -18,7 +18,7 @@
 //! SQL Abstract Syntax Tree (AST) types for table constraints
 
 use crate::ast::{
-    display_comma_separated, display_separated, ConstraintCharacteristics,
+    display_comma_separated, display_separated, CheckOption, ConstraintCharacteristics,
     ConstraintReferenceMatchKind, Expr, Ident, IndexColumn, IndexOption, IndexType,
     KeyOrIndexDisplay, NullsDistinctOption, ObjectName, ReferentialAction,
 };
@@ -248,10 +248,8 @@ pub struct ForeignKeyConstraint {
     pub characteristics: Option<ConstraintCharacteristics>,
     /// Optional `WITH CHECK OPTION` trailer.
     ///
-    /// `Some(true)` => `WITH CHECK OPTION`, `Some(false)` => `WITH NO CHECK OPTION`
-    ///
     /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/column_partition_definition/table_constraint/WITH-NO-CHECK-OPTION)
-    pub with_check_option: Option<bool>,
+    pub with_check_option: Option<CheckOption>,
 }
 
 impl fmt::Display for ForeignKeyConstraint {
@@ -280,8 +278,8 @@ impl fmt::Display for ForeignKeyConstraint {
         if let Some(characteristics) = &self.characteristics {
             write!(f, " {characteristics}")?;
         }
-        if let Some(check) = self.with_check_option {
-            write!(f, " WITH {}CHECK OPTION", if check { "" } else { "NO " })?;
+        if let Some(check_option) = self.with_check_option {
+            write!(f, " {check_option}")?;
         }
         Ok(())
     }

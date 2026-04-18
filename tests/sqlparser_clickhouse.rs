@@ -940,10 +940,6 @@ fn parse_create_view_with_fields_data_types() {
         }
         _ => unreachable!(),
     }
-
-    clickhouse()
-        .parse_sql_statements(r#"CREATE VIEW v (i, f) AS SELECT * FROM t"#)
-        .expect_err("CREATE VIEW with fields and without data types should be invalid");
 }
 
 #[test]

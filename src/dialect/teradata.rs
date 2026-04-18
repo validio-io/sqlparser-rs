@@ -99,4 +99,9 @@ impl Dialect for TeradataDialect {
     fn supports_range_function(&self) -> bool {
         true
     }
+
+    /// See <https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-VIEW-and-REPLACE-VIEW>
+    fn supports_typed_view_columns(&self) -> bool {
+        true
+    }
 }

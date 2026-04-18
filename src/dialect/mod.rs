@@ -1026,6 +1026,16 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect allows a data type to follow each column name
+    /// in a `CREATE VIEW` column list, e.g.
+    ///
+    /// ```sql
+    /// CREATE RECURSIVE VIEW v (id INTEGER, n INTEGER) AS ...
+    /// ```
+    fn supports_typed_view_columns(&self) -> bool {
+        false
+    }
+
     /// Returns true if this dialect supports the `ARRAY` type without
     /// specifying an element type.
     ///

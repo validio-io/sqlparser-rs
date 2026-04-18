@@ -644,7 +644,16 @@ impl<'a> Parser<'a> {
                 Keyword::FETCH => self.parse_fetch_statement(),
                 Keyword::DELETE => self.parse_delete(next_token),
                 Keyword::INSERT => self.parse_insert(next_token),
-                Keyword::REPLACE => self.parse_replace(next_token),
+                Keyword::REPLACE => {
+                    if self.peek_keyword(Keyword::VIEW)
+                        || self.peek_keywords(&[Keyword::RECURSIVE, Keyword::VIEW])
+                    {
+                        self.parse_create_view(true, false, false, false, None)
+                            .map(Into::into)
+                    } else {
+                        self.parse_replace(next_token)
+                    }
+                }
                 Keyword::UNCACHE => self.parse_uncache_table(),
                 Keyword::UPDATE => self.parse_update(next_token),
                 Keyword::ALTER => self.parse_alter(),
@@ -5166,8 +5175,9 @@ impl<'a> Parser<'a> {
             || self.peek_keyword(Keyword::VIEW)
             || self.peek_keywords(&[Keyword::SECURE, Keyword::MATERIALIZED, Keyword::VIEW])
             || self.peek_keywords(&[Keyword::SECURE, Keyword::VIEW])
+            || self.peek_keywords(&[Keyword::RECURSIVE, Keyword::VIEW])
         {
-            self.parse_create_view(or_alter, or_replace, temporary, create_view_params)
+            self.parse_create_view(false, or_alter, or_replace, temporary, create_view_params)
                 .map(Into::into)
         } else if self.parse_keyword(Keyword::POLICY) {
             self.parse_create_policy().map(Into::into)
@@ -6533,6 +6543,7 @@ impl<'a> Parser<'a> {
     /// Parse a `CREATE VIEW` statement.
     pub fn parse_create_view(
         &mut self,
+        replace: bool,
         or_alter: bool,
         or_replace: bool,
         temporary: bool,
@@ -6540,6 +6551,7 @@ impl<'a> Parser<'a> {
     ) -> Result<CreateView, ParserError> {
         let secure = self.parse_keyword(Keyword::SECURE);
         let materialized = self.parse_keyword(Keyword::MATERIALIZED);
+        let recursive = self.parse_keyword(Keyword::RECURSIVE);
         self.expect_keyword_is(Keyword::VIEW)?;
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         // Tries to parse IF NOT EXISTS either before name or after name
@@ -6551,8 +6563,6 @@ impl<'a> Parser<'a> {
             && self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let if_not_exists = if_not_exists_first || name_before_not_exists;
         let copy_grants = self.parse_keywords(&[Keyword::COPY, Keyword::GRANTS]);
-        // Many dialects support `OR ALTER` right after `CREATE`, but we don't (yet).
-        // ANSI SQL and Postgres support RECURSIVE here, but we don't support it either.
         let columns = self.parse_view_columns()?;
         let mut options = CreateTableOptions::None;
         let with_options = self.parse_options(Keyword::WITH)?;
@@ -6594,7 +6604,7 @@ impl<'a> Parser<'a> {
 
         self.expect_keyword_is(Keyword::AS)?;
         let query = self.parse_query()?;
-        // Optional `WITH [ CASCADED | LOCAL ] CHECK OPTION` is widely supported here.
+        let with_check_option = self.maybe_parse_with_check_option()?;
 
         let with_no_schema_binding = dialect_of!(self is RedshiftSqlDialect | GenericDialect)
             && self.parse_keywords(&[
@@ -6622,7 +6632,39 @@ impl<'a> Parser<'a> {
             to,
             params: create_view_params,
             name_before_not_exists,
+            replace,
+            recursive,
+            with_check_option,
         })
+    }
+
+    fn maybe_parse_with_check_option(&mut self) -> Result<Option<CheckOption>, ParserError> {
+        if self.parse_keywords(&[
+            Keyword::WITH,
+            Keyword::CASCADED,
+            Keyword::CHECK,
+            Keyword::OPTION,
+        ]) {
+            Ok(Some(CheckOption::Cascaded))
+        } else if self.parse_keywords(&[
+            Keyword::WITH,
+            Keyword::LOCAL,
+            Keyword::CHECK,
+            Keyword::OPTION,
+        ]) {
+            Ok(Some(CheckOption::Local))
+        } else if self.parse_keywords(&[Keyword::WITH, Keyword::CHECK, Keyword::OPTION]) {
+            Ok(Some(CheckOption::Unqualified))
+        } else if self.parse_keywords(&[
+            Keyword::WITH,
+            Keyword::NO,
+            Keyword::CHECK,
+            Keyword::OPTION,
+        ]) {
+            Ok(Some(CheckOption::No))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Parse optional parameters for the `CREATE VIEW` statement supported by [MySQL].
@@ -9024,17 +9066,6 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Some(WithData { data, statistics }))
-    }
-
-    /// Parse an optional `WITH [NO] CHECK OPTION` trailer on a foreign key.
-    fn maybe_parse_with_check_option(&mut self) -> Result<Option<bool>, ParserError> {
-        if self.parse_keywords(&[Keyword::WITH, Keyword::NO, Keyword::CHECK, Keyword::OPTION]) {
-            Ok(Some(false))
-        } else if self.parse_keywords(&[Keyword::WITH, Keyword::CHECK, Keyword::OPTION]) {
-            Ok(Some(true))
-        } else {
-            Ok(None)
-        }
     }
 
     fn maybe_parse_create_table_like(
@@ -13957,8 +13988,8 @@ impl<'a> Parser<'a> {
     fn parse_view_column(&mut self) -> Result<ViewColumnDef, ParserError> {
         let name = self.parse_identifier()?;
         let options = self.parse_view_column_options()?;
-        let data_type = if dialect_of!(self is ClickHouseDialect) {
-            Some(self.parse_data_type()?)
+        let data_type = if self.dialect.supports_typed_view_columns() {
+            self.maybe_parse(|parser| parser.parse_data_type())?
         } else {
             None
         };

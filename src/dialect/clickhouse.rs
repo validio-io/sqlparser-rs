@@ -145,4 +145,9 @@ impl Dialect for ClickHouseDialect {
     fn supports_comma_separated_trim(&self) -> bool {
         true
     }
+
+    /// See <https://clickhouse.com/docs/en/sql-reference/statements/create/view>
+    fn supports_typed_view_columns(&self) -> bool {
+        true
+    }
 }

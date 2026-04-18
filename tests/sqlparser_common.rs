@@ -8371,6 +8371,9 @@ fn parse_create_view() {
             name_before_not_exists: _,
             secure: _,
             copy_grants: _,
+            replace: _,
+            recursive: _,
+            with_check_option: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8421,9 +8424,7 @@ fn parse_create_view_with_options() {
 #[test]
 fn parse_create_view_with_columns() {
     let sql = "CREATE VIEW v (has, cols) AS SELECT 1, 2";
-    // TODO: why does this fail for ClickHouseDialect? (#1449)
-    // match all_dialects().verified_stmt(sql) {
-    match all_dialects_except(|d| d.is::<ClickHouseDialect>()).verified_stmt(sql) {
+    match verified_stmt(sql) {
         Statement::CreateView(create_view) => {
             let or_alter = create_view.or_alter;
             let name = create_view.name;
@@ -8490,6 +8491,9 @@ fn parse_create_view_temporary() {
             name_before_not_exists: _,
             secure: _,
             copy_grants: _,
+            replace: _,
+            recursive: _,
+            with_check_option: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8532,6 +8536,9 @@ fn parse_create_or_replace_view() {
             name_before_not_exists: _,
             secure: _,
             copy_grants: _,
+            replace: _,
+            recursive: _,
+            with_check_option: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8578,6 +8585,9 @@ fn parse_create_or_replace_materialized_view() {
             name_before_not_exists: _,
             secure: _,
             copy_grants: _,
+            replace: _,
+            recursive: _,
+            with_check_option: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8620,6 +8630,9 @@ fn parse_create_materialized_view() {
             name_before_not_exists: _,
             secure: _,
             copy_grants: _,
+            replace: _,
+            recursive: _,
+            with_check_option: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8662,6 +8675,9 @@ fn parse_create_materialized_view_with_cluster_by() {
             name_before_not_exists: _,
             secure: _,
             copy_grants: _,
+            replace: _,
+            recursive: _,
+            with_check_option: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());

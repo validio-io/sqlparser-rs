@@ -324,3 +324,41 @@ fn parse_leading_comma_before_table_options() {
         .parse_sql_statements("CREATE TABLE foo, FALLBACK (id INT)")
         .is_err());
 }
+
+#[test]
+fn parse_create_view() {
+    teradata().verified_stmt("CREATE VIEW foo AS SELECT a FROM bar");
+    teradata().verified_stmt("CREATE VIEW foo (a, b) AS SELECT a, b FROM bar");
+}
+
+#[test]
+fn parse_replace_view() {
+    teradata().verified_stmt("REPLACE VIEW foo AS SELECT a FROM bar");
+    teradata().verified_stmt("REPLACE VIEW foo (a, b) AS SELECT a, b FROM bar");
+}
+
+#[test]
+fn parse_create_recursive_view() {
+    teradata().verified_stmt("CREATE RECURSIVE VIEW foo AS SELECT a FROM bar");
+    teradata().verified_stmt("REPLACE RECURSIVE VIEW foo AS SELECT a FROM bar");
+}
+
+#[test]
+fn parse_typed_view_columns() {
+    let dialects = all_dialects_where(|d| d.supports_typed_view_columns());
+    dialects.verified_stmt(
+        "CREATE RECURSIVE VIEW foo (id INTEGER, n INTEGER) AS SELECT id, n FROM bar",
+    );
+    dialects.verified_stmt("CREATE VIEW foo (id INTEGER) AS SELECT id FROM bar");
+}
+
+#[test]
+fn parse_create_view_with_check_option() {
+    teradata().verified_stmt("CREATE VIEW foo AS SELECT a FROM bar WITH CHECK OPTION");
+    teradata().verified_stmt("CREATE VIEW foo AS SELECT a FROM bar WITH CASCADED CHECK OPTION");
+    teradata().verified_stmt("CREATE VIEW foo AS SELECT a FROM bar WITH LOCAL CHECK OPTION");
+    teradata().verified_stmt("REPLACE VIEW foo AS SELECT a FROM bar WITH CHECK OPTION");
+    teradata().verified_stmt(
+        "REPLACE RECURSIVE VIEW foo AS SELECT a FROM bar WITH CASCADED CHECK OPTION",
+    );
+}

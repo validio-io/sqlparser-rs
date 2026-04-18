@@ -2112,8 +2112,8 @@ impl fmt::Display for ColumnOption {
                 if let Some(characteristics) = &constraint.characteristics {
                     write!(f, " {characteristics}")?;
                 }
-                if let Some(check) = constraint.with_check_option {
-                    write!(f, " WITH {}CHECK OPTION", if check { "" } else { "NO " })?;
+                if let Some(check_option) = constraint.with_check_option {
+                    write!(f, " {check_option}")?;
                 }
                 Ok(())
             }
@@ -4903,22 +4903,69 @@ pub struct CreateView {
     pub to: Option<ObjectName>,
     /// MySQL: Optional parameters for the view algorithm, definer, and security context
     pub params: Option<CreateViewParams>,
+    /// Teradata `REPLACE VIEW` — a non-ANSI shorthand for `CREATE OR REPLACE VIEW`.
+    /// Preserved so the original surface form round-trips.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-VIEW-and-REPLACE-VIEW)
+    pub replace: bool,
+    /// `RECURSIVE` modifier — `CREATE RECURSIVE VIEW` / `REPLACE RECURSIVE VIEW`.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-RECURSIVE-VIEW-and-REPLACE-RECURSIVE-VIEW)
+    pub recursive: bool,
+    /// Optional `WITH [CASCADED | LOCAL] CHECK OPTION` trailer.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-VIEW-and-REPLACE-VIEW/CREATE-VIEW-and-REPLACE-VIEW-Syntax-Elements/WITH-CHECK-OPTION)
+    pub with_check_option: Option<CheckOption>,
+}
+
+/// `WITH CHECK OPTION` trailer on a `CREATE VIEW|TABLE` statement.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-VIEW-and-REPLACE-VIEW/CREATE-VIEW-and-REPLACE-VIEW-Syntax-Elements/WITH-CHECK-OPTION)
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/column_partition_definition/table_constraint/WITH-NO-CHECK-OPTION)
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CheckOption {
+    /// `WITH CHECK OPTION`
+    Unqualified,
+    /// `WITH CASCADED CHECK OPTION`
+    Cascaded,
+    /// `WITH LOCAL CHECK OPTION`
+    Local,
+    /// `WITH NO CHECK OPTION`
+    No,
+}
+
+impl fmt::Display for CheckOption {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            CheckOption::Unqualified => "WITH CHECK OPTION",
+            CheckOption::Cascaded => "WITH CASCADED CHECK OPTION",
+            CheckOption::Local => "WITH LOCAL CHECK OPTION",
+            CheckOption::No => "WITH NO CHECK OPTION",
+        })
+    }
 }
 
 impl fmt::Display for CreateView {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "CREATE {or_alter}{or_replace}",
-            or_alter = if self.or_alter { "OR ALTER " } else { "" },
-            or_replace = if self.or_replace { "OR REPLACE " } else { "" },
-        )?;
+        if self.replace {
+            write!(f, "REPLACE ")?;
+        } else {
+            write!(
+                f,
+                "CREATE {or_alter}{or_replace}",
+                or_alter = if self.or_alter { "OR ALTER " } else { "" },
+                or_replace = if self.or_replace { "OR REPLACE " } else { "" },
+            )?;
+        }
         if let Some(ref params) = self.params {
             params.fmt(f)?;
         }
         write!(
             f,
-            "{secure}{materialized}{temporary}VIEW {if_not_and_name}{to}",
+            "{secure}{materialized}{temporary}{recursive}VIEW {if_not_and_name}{to}",
+            recursive = if self.recursive { "RECURSIVE " } else { "" },
             if_not_and_name = if self.if_not_exists {
                 if self.name_before_not_exists {
                     format!("{} IF NOT EXISTS", self.name)
@@ -4966,6 +5013,9 @@ impl fmt::Display for CreateView {
         f.write_str(" AS")?;
         SpaceOrNewline.fmt(f)?;
         self.query.fmt(f)?;
+        if let Some(check_option) = &self.with_check_option {
+            write!(f, " {check_option}")?;
+        }
         if self.with_no_schema_binding {
             write!(f, " WITH NO SCHEMA BINDING")?;
         }
