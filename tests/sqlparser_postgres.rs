@@ -6646,6 +6646,7 @@ fn parse_trigger_related_functions() {
                 },
             ],
             constraints: vec![],
+            constraints_after_columns_list: vec![],
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
             file_format: None,
@@ -6694,7 +6695,6 @@ fn parse_trigger_related_functions() {
             backup: None,
             multiset: None,
             table_attributes: vec![],
-            primary_index: None,
             with_data: None,
         }
     );
@@ -7115,6 +7115,7 @@ fn parse_alter_table_constraint_not_valid() {
                         on_update: None,
                         match_kind: None,
                         characteristics: None,
+                        with_check_option: None,
                     }
                     .into(),
                     not_valid: true,

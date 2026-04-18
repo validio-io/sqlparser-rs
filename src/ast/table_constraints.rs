@@ -31,6 +31,7 @@ use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use sqlparser::ast::OrderBy;
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
@@ -117,6 +118,13 @@ pub enum TableConstraint {
     ///
     /// [1]: https://www.postgresql.org/docs/current/sql-altertable.html
     UniqueUsingIndex(ConstraintUsingIndex),
+    /// `NO PRIMARY INDEX`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition/NO-PRIMARY-INDEX)
+    NoPrimaryIndex {
+        /// Span of the clause.
+        span: Span,
+    },
 }
 
 impl From<UniqueConstraint> for TableConstraint {
@@ -166,6 +174,7 @@ impl fmt::Display for TableConstraint {
             TableConstraint::FulltextOrSpatial(constraint) => constraint.fmt(f),
             TableConstraint::PrimaryKeyUsingIndex(c) => c.fmt_with_keyword(f, "PRIMARY KEY"),
             TableConstraint::UniqueUsingIndex(c) => c.fmt_with_keyword(f, "UNIQUE"),
+            TableConstraint::NoPrimaryIndex { span: _ } => write!(f, "NO PRIMARY INDEX"),
         }
     }
 }
@@ -237,6 +246,12 @@ pub struct ForeignKeyConstraint {
     pub match_kind: Option<ConstraintReferenceMatchKind>,
     /// Optional characteristics (e.g., `DEFERRABLE`).
     pub characteristics: Option<ConstraintCharacteristics>,
+    /// Optional `WITH CHECK OPTION` trailer.
+    ///
+    /// `Some(true)` => `WITH CHECK OPTION`, `Some(false)` => `WITH NO CHECK OPTION`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/column_partition_definition/table_constraint/WITH-NO-CHECK-OPTION)
+    pub with_check_option: Option<bool>,
 }
 
 impl fmt::Display for ForeignKeyConstraint {
@@ -264,6 +279,9 @@ impl fmt::Display for ForeignKeyConstraint {
         }
         if let Some(characteristics) = &self.characteristics {
             write!(f, " {characteristics}")?;
+        }
+        if let Some(check) = self.with_check_option {
+            write!(f, " WITH {}CHECK OPTION", if check { "" } else { "NO " })?;
         }
         Ok(())
     }
@@ -352,18 +370,52 @@ impl crate::ast::Spanned for FullTextOrSpatialConstraint {
     }
 }
 
-/// MySQLs [index definition][1] for index creation. Not present on ANSI so, for now, the usage
+/// Syntax used to define an index constraint.
+///
+/// [MySQL](https://dev.mysql.com/doc/refman/8.0/en/create-table.html)
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum IndexConstraintKind {
+    /// `KEY`
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.0/en/create-table.html)
+    Key,
+    /// `INDEX`
+    ///
+    /// [MySQL](https://dev.mysql.com/doc/refman/8.0/en/create-table.html)
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition)
+    Index,
+    /// `PRIMARY INDEX`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition)
+    PrimaryIndex,
+}
+
+impl fmt::Display for IndexConstraintKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Key => write!(f, "KEY"),
+            Self::Index => write!(f, "INDEX"),
+            Self::PrimaryIndex => write!(f, "PRIMARY INDEX"),
+        }
+    }
+}
+
+/// [MySQL] [index definition] for index creation. Not present on ANSI so, for now, the usage
 /// is restricted to MySQL, as no other dialects that support this syntax were found.
 ///
 /// `{INDEX | KEY} [index_name] [index_type] (key_part,...) [index_option]...`
 ///
-/// [1]: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+/// [MySQL](https://dev.mysql.com/doc/refman/8.0/en/create-table.html)
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition)
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct IndexConstraint {
-    /// Whether this index starts with KEY (true) or INDEX (false), to maintain the same syntax.
-    pub display_as_key: bool,
+    /// Syntax used to define the index constraint.
+    pub kind: IndexConstraintKind,
     /// Index name.
     pub name: Option<Ident>,
     /// Optional [index type][1].
@@ -375,11 +427,15 @@ pub struct IndexConstraint {
     /// Optional index options such as `USING`; see [`IndexOption`].
     /// Options applied to the index (e.g., `COMMENT`, `WITH` options).
     pub index_options: Vec<IndexOption>,
+    /// `ORDER BY` clause for the index.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/CREATE-TABLE-Syntax)
+    pub order_by: Option<OrderBy>,
 }
 
 impl fmt::Display for IndexConstraint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", if self.display_as_key { "KEY" } else { "INDEX" })?;
+        write!(f, "{}", self.kind)?;
         if let Some(name) = &self.name {
             write!(f, " {name}")?;
         }
@@ -389,6 +445,9 @@ impl fmt::Display for IndexConstraint {
         write!(f, " ({})", display_comma_separated(&self.columns))?;
         if !self.index_options.is_empty() {
             write!(f, " {}", display_comma_separated(&self.index_options))?;
+        }
+        if let Some(order_by) = &self.order_by {
+            write!(f, " {order_by}")?;
         }
         Ok(())
     }

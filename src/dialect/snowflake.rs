@@ -29,12 +29,13 @@ use crate::ast::helpers::stmt_data_loading::{
 use crate::ast::{
     AlterTable, AlterTableOperation, AlterTableType, CatalogSyncNamespaceMode, ColumnOption,
     ColumnPolicy, ColumnPolicyProperty, ContactEntry, CopyIntoSnowflakeKind, CreateTable,
-    CreateTableLikeKind, DollarQuotedString, Ident, IdentityParameters, IdentityProperty,
-    IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder, InitializeKind,
-    Insert, MultiTableInsertIntoClause, MultiTableInsertType, MultiTableInsertValue,
-    MultiTableInsertValues, MultiTableInsertWhenClause, ObjectName, ObjectNamePart,
-    RefreshModeKind, RowAccessPolicy, ShowObjects, SqlOption, Statement, StorageLifecyclePolicy,
-    StorageSerializationPolicy, TableObject, TagsColumnOption, Value, WrappedCollection,
+    CreateTableLikeKind, CreateTableOnCommit, CreateTableQuery, DollarQuotedString, Ident,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, InitializeKind, Insert, MultiTableInsertIntoClause,
+    MultiTableInsertType, MultiTableInsertValue, MultiTableInsertValues,
+    MultiTableInsertWhenClause, ObjectName, ObjectNamePart, RefreshModeKind, RowAccessPolicy,
+    ShowObjects, SqlOption, Statement, StorageLifecyclePolicy, StorageSerializationPolicy,
+    TableObject, TagsColumnOption, Value, WrappedCollection,
 };
 use crate::dialect::{Dialect, Precedence};
 use crate::keywords::Keyword;
@@ -862,7 +863,7 @@ pub fn parse_create_table(
                 }
                 Keyword::AS => {
                     let query = parser.parse_query()?;
-                    builder = builder.query(Some(query));
+                    builder = builder.query(Some(CreateTableQuery::Query(query)));
                 }
                 Keyword::CLONE => {
                     let clone = parser.parse_object_name(false).ok();
@@ -959,7 +960,9 @@ pub fn parse_create_table(
                     builder = builder.with_tags(Some(tags));
                 }
                 Keyword::ON if parser.parse_keyword(Keyword::COMMIT) => {
-                    let on_commit = Some(parser.parse_create_table_on_commit()?);
+                    let on_commit = Some(CreateTableOnCommit::BeforeQuery(
+                        parser.parse_create_table_on_commit()?,
+                    ));
                     builder = builder.on_commit(on_commit);
                 }
                 Keyword::EXTERNAL_VOLUME => {

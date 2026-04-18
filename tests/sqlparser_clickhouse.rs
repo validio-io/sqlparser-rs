@@ -1510,9 +1510,15 @@ fn parse_create_table_on_commit_and_as_query() {
             ..
         }) => {
             assert_eq!(name.to_string(), "test");
-            assert_eq!(on_commit, Some(OnCommit::PreserveRows));
             assert_eq!(
-                query.unwrap().body.as_select().unwrap().projection,
+                on_commit,
+                Some(CreateTableOnCommit::BeforeQuery(OnCommit::PreserveRows))
+            );
+            let CreateTableQuery::Query(q) = query.unwrap() else {
+                unreachable!()
+            };
+            assert_eq!(
+                q.body.as_select().unwrap().projection,
                 vec![UnnamedExpr(Expr::Value(
                     (Value::Number("1".parse().unwrap(), false)).with_empty_span()
                 ))]

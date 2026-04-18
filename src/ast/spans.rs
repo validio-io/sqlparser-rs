@@ -33,11 +33,11 @@ use super::{
     AttachedToken, BeginEndStatements, CaseStatement, CloseCursor, ClusteredIndex, ColumnDef,
     ColumnOption, ColumnOptionDef, ConditionalStatementBlock, ConditionalStatements,
     ConflictTarget, ConnectByKind, ConstraintCharacteristics, CopySource, CreateIndex, CreateTable,
-    CreateTableOptions, Cte, Delete, DoUpdate, ExceptSelectItem, ExcludeSelectItem, Expr,
-    ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg, FunctionArgExpr,
-    FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr, HavingBound,
-    IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr, Join,
-    JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
+    CreateTableOptions, CreateTableQuery, Cte, Delete, DoUpdate, ExceptSelectItem,
+    ExcludeSelectItem, Expr, ExprWithAlias, Fetch, ForValues, FromTable, Function, FunctionArg,
+    FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
+    HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr,
+    Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
     MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
     MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
     ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
@@ -551,6 +551,7 @@ impl Spanned for CreateTable {
             name,
             columns,
             constraints,
+            constraints_after_columns_list,
             hive_distribution: _, // hive specific
             hive_formats: _,      // hive specific
             file_format: _,       // enum
@@ -599,7 +600,6 @@ impl Spanned for CreateTable {
             backup: _,
             multiset: _,
             table_attributes: _,
-            primary_index: _,
             with_data: _,
         } = self;
 
@@ -608,11 +608,21 @@ impl Spanned for CreateTable {
                 .chain(core::iter::once(table_options.span()))
                 .chain(columns.iter().map(|i| i.span()))
                 .chain(constraints.iter().map(|i| i.span()))
+                .chain(constraints_after_columns_list.iter().map(|i| i.span()))
                 .chain(query.iter().map(|i| i.span()))
                 .chain(clone.iter().map(|i| i.span()))
                 .chain(partition_of.iter().map(|i| i.span()))
                 .chain(for_values.iter().map(|i| i.span())),
         )
+    }
+}
+
+impl Spanned for CreateTableQuery {
+    fn span(&self) -> Span {
+        match self {
+            CreateTableQuery::Query(q) => q.span(),
+            CreateTableQuery::Table(name) => name.span(),
+        }
     }
 }
 
@@ -647,6 +657,7 @@ impl Spanned for TableConstraint {
             TableConstraint::FulltextOrSpatial(constraint) => constraint.span(),
             TableConstraint::PrimaryKeyUsingIndex(constraint)
             | TableConstraint::UniqueUsingIndex(constraint) => constraint.span(),
+            TableConstraint::NoPrimaryIndex { span } => *span,
         }
     }
 }

@@ -1367,6 +1367,10 @@ pub enum KeyOrIndexDisplay {
     Key,
     /// Display the INDEX keyword
     Index,
+    /// `PRIMARY INDEX`
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/CREATE-TABLE-Syntax)
+    PrimaryIndex,
 }
 
 impl KeyOrIndexDisplay {
@@ -1393,6 +1397,9 @@ impl fmt::Display for KeyOrIndexDisplay {
             }
             KeyOrIndexDisplay::Index => {
                 write!(f, "INDEX")
+            }
+            KeyOrIndexDisplay::PrimaryIndex => {
+                write!(f, "PRIMARY INDEX")
             }
         }
     }
@@ -2104,6 +2111,9 @@ impl fmt::Display for ColumnOption {
                 }
                 if let Some(characteristics) = &constraint.characteristics {
                     write!(f, " {characteristics}")?;
+                }
+                if let Some(check) = constraint.with_check_option {
+                    write!(f, " WITH {}CHECK OPTION", if check { "" } else { "NO " })?;
                 }
                 Ok(())
             }
@@ -2974,6 +2984,22 @@ impl fmt::Display for CreateIndex {
     }
 }
 
+/// `ON COMMIT` clause for a `CREATE TABLE` statement along with
+/// positional context within the query.
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum CreateTableOnCommit {
+    /// `CREATE TABLE t ON COMMIT DROP AS SELECT 1
+    ///
+    /// [Clickhouse](https://clickhouse.com/docs/en/sql-reference/statements/create/table/)
+    BeforeQuery(OnCommit),
+    /// `CREATE TABLE t AS SELECT 1 ON COMMIT DROP
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/CREATE-TABLE-Syntax)
+    AfterQuery(OnCommit),
+}
+
 /// CREATE TABLE statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -3005,8 +3031,22 @@ pub struct CreateTable {
     pub name: ObjectName,
     /// Column definitions
     pub columns: Vec<ColumnDef>,
-    /// Table constraints
+    /// Table constraints that are declared within the columns list.
+    ///
+    /// ```sql
+    /// CREATE TABLE t (a INT, INDEX (b));
+    /// ```
+    ///
+    /// [MySql]: https://dev.mysql.com/doc/refman/8.3/en/create-table.html
     pub constraints: Vec<TableConstraint>,
+    /// Table constraints that are declared after the columns list.
+    ///
+    /// ```sql
+    /// CREATE TABLE t (a INT) INDEX (b);
+    /// ```
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/CREATE-TABLE-Syntax)
+    pub constraints_after_columns_list: Vec<TableConstraint>,
     /// Hive-specific distribution style
     pub hive_distribution: HiveDistributionStyle,
     /// Hive-specific formats like `ROW FORMAT DELIMITED` or `ROW FORMAT SERDE 'serde_class' WITH SERDEPROPERTIES (...)`
@@ -3017,8 +3057,8 @@ pub struct CreateTable {
     pub file_format: Option<FileFormat>,
     /// Location of the table data
     pub location: Option<String>,
-    /// Query used to populate the table
-    pub query: Option<Box<Query>>,
+    /// `CREATE TABLE ... AS <query>`.
+    pub query: Option<CreateTableQuery>,
     /// If the table should be created without a rowid (SQLite)
     pub without_rowid: bool,
     /// `LIKE` clause
@@ -3031,9 +3071,8 @@ pub struct CreateTable {
     /// so the `comment` field is optional and different than the comment field in the general options list.
     /// [Hive](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL#LanguageManualDDL-CreateTable)
     pub comment: Option<CommentDef>,
-    /// ClickHouse "ON COMMIT" clause:
-    /// <https://clickhouse.com/docs/en/sql-reference/statements/create/table/>
-    pub on_commit: Option<OnCommit>,
+    /// `ON COMMIT` clause.
+    pub on_commit: Option<CreateTableOnCommit>,
     /// ClickHouse "ON CLUSTER" clause:
     /// <https://clickhouse.com/docs/en/sql-reference/distributed-ddl/>
     pub on_cluster: Option<Ident>,
@@ -3154,10 +3193,6 @@ pub struct CreateTable {
     ///
     /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements)
     pub table_attributes: Vec<TableAttribute>,
-    /// `PRIMARY INDEX` clause.
-    ///
-    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition)
-    pub primary_index: Option<PrimaryIndex>,
     /// `WITH DATA` clause on a `CREATE TABLE ... AS` statement.
     ///
     /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/AS_clause/WITH-Clause-Phrase)
@@ -3459,16 +3494,7 @@ impl fmt::Display for CreateTable {
             write!(f, " REQUIRE USER")?;
         }
 
-        if let Some(primary_index) = &self.primary_index {
-            write!(f, " {primary_index}")?;
-        }
-        if self.on_commit.is_some() {
-            let on_commit = match self.on_commit {
-                Some(OnCommit::DeleteRows) => "ON COMMIT DELETE ROWS",
-                Some(OnCommit::PreserveRows) => "ON COMMIT PRESERVE ROWS",
-                Some(OnCommit::Drop) => "ON COMMIT DROP",
-                None => "",
-            };
+        if let Some(CreateTableOnCommit::BeforeQuery(on_commit)) = &self.on_commit {
             write!(f, " {on_commit}")?;
         }
         if self.strict {
@@ -3492,52 +3518,35 @@ impl fmt::Display for CreateTable {
         if let Some(with_data) = &self.with_data {
             write!(f, " {with_data}")?;
         }
+        if !self.constraints_after_columns_list.is_empty() {
+            write!(f, " ")?;
+            display_separated(&self.constraints_after_columns_list, " ").fmt(f)?;
+        }
+        if let Some(CreateTableOnCommit::AfterQuery(on_commit)) = &self.on_commit {
+            write!(f, " {on_commit}")?;
+        }
         Ok(())
     }
 }
 
-/// `PRIMARY INDEX` clause on `CREATE TABLE`.
-///
-/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition)
+/// Source for a `CREATE TABLE ... AS ...` statement.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
-pub enum PrimaryIndex {
-    /// `NO PRIMARY INDEX`
+pub enum CreateTableQuery {
+    /// `CREATE TABLE t AS (SELECT ...)`
+    Query(Box<Query>),
+    /// `CREATE TABLE t AS <source_table>`
     ///
-    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition/NO-PRIMARY-INDEX)
-    None,
-    /// `[UNIQUE] PRIMARY INDEX [name] (col[, col]...)`
-    ///
-    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS/Syntax-Elements/index_definition/PRIMARY-INDEX-and-UNIQUE-PRIMARY-INDEX)
-    Indexed {
-        /// `true` for `UNIQUE PRIMARY INDEX`, `false` for plain `PRIMARY INDEX`.
-        unique: bool,
-        /// Optional index name, e.g. `PRIMARY INDEX my_idx (col)`.
-        name: Option<Ident>,
-        /// Index column list.
-        columns: Vec<Ident>,
-    },
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Table-Statements/CREATE-TABLE-and-CREATE-TABLE-AS)
+    Table(ObjectName),
 }
 
-impl fmt::Display for PrimaryIndex {
+impl fmt::Display for CreateTableQuery {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            PrimaryIndex::None => f.write_str("NO PRIMARY INDEX"),
-            PrimaryIndex::Indexed {
-                unique,
-                name,
-                columns,
-            } => {
-                if *unique {
-                    f.write_str("UNIQUE ")?;
-                }
-                f.write_str("PRIMARY INDEX")?;
-                if let Some(name) = name {
-                    write!(f, " {name}")?;
-                }
-                write!(f, " ({})", display_comma_separated(columns))
-            }
+            CreateTableQuery::Query(q) => write!(f, "{q}"),
+            CreateTableQuery::Table(name) => write!(f, "{name}"),
         }
     }
 }

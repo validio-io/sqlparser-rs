@@ -748,6 +748,7 @@ fn test_duckdb_union_datatype() {
                 }
             ],
             constraints: Default::default(),
+            constraints_after_columns_list: Default::default(),
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
             file_format: Default::default(),
@@ -796,7 +797,6 @@ fn test_duckdb_union_datatype() {
             backup: Default::default(),
             multiset: Default::default(),
             table_attributes: Default::default(),
-            primary_index: Default::default(),
             with_data: Default::default(),
         }),
         stmt

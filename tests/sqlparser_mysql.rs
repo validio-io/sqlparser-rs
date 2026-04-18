@@ -1348,8 +1348,11 @@ fn parse_create_table_both_options_and_as_query() {
                 value: Expr::Identifier(Ident::new("utf8mb4_0900_ai_ci".to_owned()))
             }));
 
+            let CreateTableQuery::Query(q) = query.unwrap() else {
+                unreachable!()
+            };
             assert_eq!(
-                query.unwrap().body.as_select().unwrap().projection,
+                q.body.as_select().unwrap().projection,
                 vec![SelectItem::UnnamedExpr(Expr::Value(
                     (number("1")).with_empty_span()
                 ))]

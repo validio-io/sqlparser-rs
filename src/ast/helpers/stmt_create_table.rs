@@ -24,15 +24,14 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "visitor")]
 use sqlparser_derive::{Visit, VisitMut};
 
+use crate::ast::ddl::CreateTableOnCommit;
 use crate::ast::{
     ClusteredBy, ColumnDef, CommentDef, CreateTable, CreateTableLikeKind, CreateTableOptions,
-    DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat, Ident,
-    InitializeKind, ObjectName, OnCommit, OneOrManyWithParens, PrimaryIndex, Query,
-    RefreshModeKind, RowAccessPolicy, Statement, StorageLifecyclePolicy,
-    StorageSerializationPolicy, TableAttribute, TableConstraint, TableVersion, Tag, WithData,
-    WrappedCollection,
+    CreateTableQuery, DistStyle, Expr, FileFormat, ForValues, HiveDistributionStyle, HiveFormat,
+    Ident, InitializeKind, ObjectName, OneOrManyWithParens, RefreshModeKind, RowAccessPolicy,
+    Statement, StorageLifecyclePolicy, StorageSerializationPolicy, TableAttribute, TableConstraint,
+    TableVersion, Tag, WithData, WrappedCollection,
 };
-
 use crate::parser::ParserError;
 
 /// Builder for create table statement variant ([1]).
@@ -90,8 +89,10 @@ pub struct CreateTableBuilder {
     pub name: ObjectName,
     /// Column definitions for the table.
     pub columns: Vec<ColumnDef>,
-    /// Table-level constraints.
+    /// Table-level constraints declared within the columns list.
     pub constraints: Vec<TableConstraint>,
+    /// Table-level constraints declared after the columns list.
+    pub constraints_after_columns_list: Vec<TableConstraint>,
     /// Hive distribution style.
     pub hive_distribution: HiveDistributionStyle,
     /// Optional Hive format settings.
@@ -100,8 +101,8 @@ pub struct CreateTableBuilder {
     pub file_format: Option<FileFormat>,
     /// Optional storage location.
     pub location: Option<String>,
-    /// Optional `AS SELECT` query for the table.
-    pub query: Option<Box<Query>>,
+    /// Optional `AS ...` source (subquery or source table) for the table.
+    pub query: Option<CreateTableQuery>,
     /// Whether `WITHOUT ROWID` is set.
     pub without_rowid: bool,
     /// Optional `LIKE` clause kind.
@@ -113,7 +114,7 @@ pub struct CreateTableBuilder {
     /// Optional table comment.
     pub comment: Option<CommentDef>,
     /// Optional `ON COMMIT` behavior.
-    pub on_commit: Option<OnCommit>,
+    pub on_commit: Option<CreateTableOnCommit>,
     /// Optional cluster identifier.
     pub on_cluster: Option<Ident>,
     /// Optional primary key expression.
@@ -188,8 +189,6 @@ pub struct CreateTableBuilder {
     pub multiset: Option<bool>,
     /// Teradata comma-separated table attributes (e.g. `, NO FALLBACK, CHECKSUM = DEFAULT`).
     pub table_attributes: Vec<TableAttribute>,
-    /// `PRIMARY INDEX` clause.
-    pub primary_index: Option<PrimaryIndex>,
     /// `WITH DATA` clause.
     pub with_data: Option<WithData>,
 }
@@ -211,6 +210,7 @@ impl CreateTableBuilder {
             name,
             columns: vec![],
             constraints: vec![],
+            constraints_after_columns_list: vec![],
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
             file_format: None,
@@ -259,7 +259,6 @@ impl CreateTableBuilder {
             backup: None,
             multiset: None,
             table_attributes: Vec::new(),
-            primary_index: None,
             with_data: None,
         }
     }
@@ -318,9 +317,14 @@ impl CreateTableBuilder {
         self.columns = columns;
         self
     }
-    /// Set table-level constraints.
+    /// Set table-level constraints declared within the colums list.
     pub fn constraints(mut self, constraints: Vec<TableConstraint>) -> Self {
         self.constraints = constraints;
+        self
+    }
+    /// Set table-level constraints declared after the  columns list.
+    pub fn constraints_after_columns_list(mut self, constraints: Vec<TableConstraint>) -> Self {
+        self.constraints_after_columns_list = constraints;
         self
     }
     /// Set Hive distribution style.
@@ -344,7 +348,7 @@ impl CreateTableBuilder {
         self
     }
     /// Set an underlying `AS SELECT` query for the table.
-    pub fn query(mut self, query: Option<Box<Query>>) -> Self {
+    pub fn query(mut self, query: Option<CreateTableQuery>) -> Self {
         self.query = query;
         self
     }
@@ -375,7 +379,7 @@ impl CreateTableBuilder {
         self
     }
     /// Set `ON COMMIT` behavior for temporary tables.
-    pub fn on_commit(mut self, on_commit: Option<OnCommit>) -> Self {
+    pub fn on_commit(mut self, on_commit: Option<CreateTableOnCommit>) -> Self {
         self.on_commit = on_commit;
         self
     }
@@ -580,11 +584,6 @@ impl CreateTableBuilder {
         self.table_attributes = table_attributes;
         self
     }
-    /// Set `PRIMARY INDEX` clause.
-    pub fn primary_index(mut self, primary_index: Option<PrimaryIndex>) -> Self {
-        self.primary_index = primary_index;
-        self
-    }
     /// Set `WITH DATA` clause.
     pub fn with_data(mut self, with_data: Option<WithData>) -> Self {
         self.with_data = with_data;
@@ -606,6 +605,7 @@ impl CreateTableBuilder {
             name: self.name,
             columns: self.columns,
             constraints: self.constraints,
+            constraints_after_columns_list: self.constraints_after_columns_list,
             hive_distribution: self.hive_distribution,
             hive_formats: self.hive_formats,
             file_format: self.file_format,
@@ -654,7 +654,6 @@ impl CreateTableBuilder {
             backup: self.backup,
             multiset: self.multiset,
             table_attributes: self.table_attributes,
-            primary_index: self.primary_index,
             with_data: self.with_data,
         }
     }
@@ -691,6 +690,7 @@ impl From<CreateTable> for CreateTableBuilder {
             name: table.name,
             columns: table.columns,
             constraints: table.constraints,
+            constraints_after_columns_list: table.constraints_after_columns_list,
             hive_distribution: table.hive_distribution,
             hive_formats: table.hive_formats,
             file_format: table.file_format,
@@ -739,7 +739,6 @@ impl From<CreateTable> for CreateTableBuilder {
             backup: table.backup,
             multiset: table.multiset,
             table_attributes: table.table_attributes,
-            primary_index: table.primary_index,
             with_data: table.with_data,
         }
     }

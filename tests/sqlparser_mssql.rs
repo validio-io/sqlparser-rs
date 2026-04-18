@@ -2003,6 +2003,7 @@ fn parse_create_table_with_valid_options() {
                     },
                 ],
                 constraints: vec![],
+                constraints_after_columns_list: vec![],
                 hive_distribution: HiveDistributionStyle::NONE,
                 hive_formats: None,
                 file_format: None,
@@ -2053,7 +2054,6 @@ fn parse_create_table_with_valid_options() {
                 backup: None,
                 multiset: None,
                 table_attributes: vec![],
-                primary_index: None,
                 with_data: None,
             })
         );
@@ -2183,6 +2183,7 @@ fn parse_create_table_with_identity_column() {
                     options: column_options,
                 },],
                 constraints: vec![],
+                constraints_after_columns_list: vec![],
                 hive_distribution: HiveDistributionStyle::NONE,
                 hive_formats: None,
                 file_format: None,
@@ -2231,7 +2232,6 @@ fn parse_create_table_with_identity_column() {
                 backup: None,
                 multiset: None,
                 table_attributes: vec![],
-                primary_index: None,
                 with_data: None,
             }),
         );

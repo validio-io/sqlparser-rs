@@ -72,19 +72,20 @@ pub use self::ddl::{
     CompressOption, ConstraintCharacteristics, CreateCollation, CreateCollationDefinition,
     CreateConnector, CreateDomain, CreateExtension, CreateFunction, CreateIndex, CreateOperator,
     CreateOperatorClass, CreateOperatorFamily, CreatePolicy, CreatePolicyCommand, CreatePolicyType,
-    CreateTable, CreateTrigger, CreateView, DataBlockSize, DataBlockUnit, Deduplicate,
-    DeferrableInitial, DistStyle, DropBehavior, DropExtension, DropFunction, DropOperator,
-    DropOperatorClass, DropOperatorFamily, DropOperatorSignature, DropPolicy, DropTrigger,
-    ForValues, FunctionReturnType, GeneratedAs, GeneratedExpressionMode, IdentityParameters,
-    IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind, IdentityPropertyOrder,
-    IndexColumn, IndexOption, IndexType, IsolatedLoading, IsolatedLoadingFor, KeyOrIndexDisplay,
-    MapTableOption, MergeBlockRatio, Msck, NullsDistinctOption, OperatorArgTypes,
-    OperatorClassItem, OperatorFamilyDropItem, OperatorFamilyItem, OperatorOption, OperatorPurpose,
-    Owner, Partition, PartitionBoundValue, Percentage, PrimaryIndex, ProcedureParam,
-    ReferentialAction, RenameTableNameKind, ReplicaIdentity, TableAttribute, TagsColumnOption,
-    TriggerObjectKind, Truncate, UserDefinedTypeCompositeAttributeDef,
-    UserDefinedTypeInternalLength, UserDefinedTypeRangeOption, UserDefinedTypeRepresentation,
-    UserDefinedTypeSqlDefinitionOption, UserDefinedTypeStorage, ViewColumnDef, WithData,
+    CreateTable, CreateTableOnCommit, CreateTableQuery, CreateTrigger, CreateView, DataBlockSize,
+    DataBlockUnit, Deduplicate, DeferrableInitial, DistStyle, DropBehavior, DropExtension,
+    DropFunction, DropOperator, DropOperatorClass, DropOperatorFamily, DropOperatorSignature,
+    DropPolicy, DropTrigger, ForValues, FunctionReturnType, GeneratedAs, GeneratedExpressionMode,
+    IdentityParameters, IdentityProperty, IdentityPropertyFormatKind, IdentityPropertyKind,
+    IdentityPropertyOrder, IndexColumn, IndexOption, IndexType, IsolatedLoading,
+    IsolatedLoadingFor, KeyOrIndexDisplay, MapTableOption, MergeBlockRatio, Msck,
+    NullsDistinctOption, OperatorArgTypes, OperatorClassItem, OperatorFamilyDropItem,
+    OperatorFamilyItem, OperatorOption, OperatorPurpose, Owner, Partition, PartitionBoundValue,
+    Percentage, ProcedureParam, ReferentialAction, RenameTableNameKind, ReplicaIdentity,
+    TableAttribute, TagsColumnOption, TriggerObjectKind, Truncate,
+    UserDefinedTypeCompositeAttributeDef, UserDefinedTypeInternalLength,
+    UserDefinedTypeRangeOption, UserDefinedTypeRepresentation, UserDefinedTypeSqlDefinitionOption,
+    UserDefinedTypeStorage, ViewColumnDef, WithData,
 };
 pub use self::dml::{
     Delete, Insert, Merge, MergeAction, MergeClause, MergeClauseKind, MergeInsertExpr,
@@ -9335,6 +9336,17 @@ pub enum OnCommit {
     PreserveRows,
     /// Drop the table on commit.
     Drop,
+}
+
+impl fmt::Display for OnCommit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let v = match self {
+            Self::DeleteRows => "DELETE ROWS",
+            Self::PreserveRows => "PRESERVE ROWS",
+            Self::Drop => "DROP",
+        };
+        write!(f, "ON COMMIT {v}")
+    }
 }
 
 /// An option in `COPY` statement.

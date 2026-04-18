@@ -3936,6 +3936,7 @@ fn parse_create_table() {
                                 on_update: None,
                                 match_kind: None,
                                 characteristics: None,
+                                with_check_option: None,
                             }),
                         }],
                     },
@@ -3954,6 +3955,7 @@ fn parse_create_table() {
                                 on_update: Some(ReferentialAction::NoAction),
                                 match_kind: None,
                                 characteristics: None,
+                                with_check_option: None,
                             }),
                         },],
                     },
@@ -3972,6 +3974,7 @@ fn parse_create_table() {
                         on_update: None,
                         match_kind: None,
                         characteristics: None,
+                        with_check_option: None,
                     }
                     .into(),
                     ForeignKeyConstraint {
@@ -3984,6 +3987,7 @@ fn parse_create_table() {
                         on_update: Some(ReferentialAction::Restrict),
                         match_kind: None,
                         characteristics: None,
+                        with_check_option: None,
                     }
                     .into(),
                     ForeignKeyConstraint {
@@ -3996,6 +4000,7 @@ fn parse_create_table() {
                         on_update: Some(ReferentialAction::SetDefault),
                         match_kind: None,
                         characteristics: None,
+                        with_check_option: None,
                     }
                     .into(),
                     ForeignKeyConstraint {
@@ -4008,6 +4013,7 @@ fn parse_create_table() {
                         on_update: Some(ReferentialAction::SetNull),
                         match_kind: None,
                         characteristics: None,
+                        with_check_option: None,
                     }
                     .into(),
                 ]
@@ -4111,6 +4117,7 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Deferred),
                             enforced: None
                         }),
+                        with_check_option: None,
                     }
                     .into(),
                     ForeignKeyConstraint {
@@ -4127,6 +4134,7 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Immediate),
                             enforced: None,
                         }),
+                        with_check_option: None,
                     }
                     .into(),
                     ForeignKeyConstraint {
@@ -4143,6 +4151,7 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Deferred),
                             enforced: Some(false),
                         }),
+                        with_check_option: None,
                     }
                     .into(),
                     ForeignKeyConstraint {
@@ -4159,6 +4168,7 @@ fn parse_create_table_with_constraint_characteristics() {
                             initially: Some(DeferrableInitial::Immediate),
                             enforced: Some(true),
                         }),
+                        with_check_option: None,
                     }
                     .into(),
                 ]
@@ -4510,7 +4520,12 @@ fn parse_create_table_as() {
     match verified_stmt(sql) {
         Statement::CreateTable(CreateTable { name, query, .. }) => {
             assert_eq!(name.to_string(), "t".to_string());
-            assert_eq!(query, Some(Box::new(verified_query("SELECT * FROM a"))));
+            assert_eq!(
+                query,
+                Some(CreateTableQuery::Query(Box::new(verified_query(
+                    "SELECT * FROM a"
+                ))))
+            );
         }
         _ => unreachable!(),
     }
@@ -4527,7 +4542,9 @@ fn parse_create_table_as() {
             assert_eq!(columns[1].to_string(), "b INT".to_string());
             assert_eq!(
                 query,
-                Some(Box::new(verified_query("SELECT 1 AS b, 2 AS a")))
+                Some(CreateTableQuery::Query(Box::new(verified_query(
+                    "SELECT 1 AS b, 2 AS a"
+                ))))
             );
         }
         _ => unreachable!(),
@@ -4557,7 +4574,7 @@ fn parse_create_table_as_table() {
     match verified_stmt(sql1) {
         Statement::CreateTable(CreateTable { query, name, .. }) => {
             assert_eq!(name, ObjectName::from(vec![Ident::new("new_table")]));
-            assert_eq!(query.unwrap(), expected_query1);
+            assert_eq!(query.unwrap(), CreateTableQuery::Query(expected_query1));
         }
         _ => unreachable!(),
     }
@@ -4583,7 +4600,7 @@ fn parse_create_table_as_table() {
     match verified_stmt(sql2) {
         Statement::CreateTable(CreateTable { query, name, .. }) => {
             assert_eq!(name, ObjectName::from(vec![Ident::new("new_table")]));
-            assert_eq!(query.unwrap(), expected_query2);
+            assert_eq!(query.unwrap(), CreateTableQuery::Query(expected_query2));
         }
         _ => unreachable!(),
     }

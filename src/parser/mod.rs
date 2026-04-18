@@ -32,6 +32,7 @@ use recursion::RecursionCounter;
 use IsLateral::*;
 use IsOptional::*;
 
+use crate::ast::table_constraints::IndexConstraintKind;
 use crate::ast::*;
 use crate::ast::{
     comments,
@@ -8573,14 +8574,9 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let primary_index = self.parse_primary_index()?;
-
-        let on_commit = if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT]) {
-            Some(self.parse_create_table_on_commit()?)
-        } else {
-            None
-        };
-
+        let mut on_commit = self
+            .maybe_parse_create_table_on_commit()?
+            .map(CreateTableOnCommit::BeforeQuery);
         let strict = self.parse_keyword(Keyword::STRICT);
 
         // Redshift: BACKUP YES|NO
@@ -8614,14 +8610,14 @@ impl<'a> Parser<'a> {
             None
         };
 
-        // Parse optional `AS ( query )`
+        // Parse optional `AS (query)` or `AS <source_table>`.
         let query = if self.parse_keyword(Keyword::AS) {
-            Some(self.parse_query()?)
+            Some(self.parse_create_table_query_source()?)
         } else if self.dialect.supports_create_table_select() && self.parse_keyword(Keyword::SELECT)
         {
             // rewind the SELECT keyword
             self.prev_token();
-            Some(self.parse_query()?)
+            Some(CreateTableQuery::Query(self.parse_query()?))
         } else {
             None
         };
@@ -8633,10 +8629,22 @@ impl<'a> Parser<'a> {
             None
         };
 
+        let mut constraints_after_columns_list = vec![];
+        while let Some(cons) = self.parse_optional_table_constraint()? {
+            constraints_after_columns_list.push(cons);
+        }
+
+        if on_commit.is_none() {
+            on_commit = self
+                .maybe_parse_create_table_on_commit()?
+                .map(CreateTableOnCommit::AfterQuery);
+        }
+
         Ok(CreateTableBuilder::new(table_name)
             .temporary(temporary)
             .columns(columns)
             .constraints(constraints)
+            .constraints_after_columns_list(constraints_after_columns_list)
             .or_replace(or_replace)
             .if_not_exists(if_not_exists)
             .transient(transient)
@@ -8662,7 +8670,6 @@ impl<'a> Parser<'a> {
             .for_values(for_values)
             .table_options(create_table_config.table_options)
             .primary_key(primary_key)
-            .primary_index(primary_index)
             .with_data(with_data)
             .strict(strict)
             .backup(backup)
@@ -8670,6 +8677,15 @@ impl<'a> Parser<'a> {
             .distkey(distkey)
             .sortkey(sortkey)
             .build())
+    }
+
+    /// Parse the `... AS <query>` clause in a `CREATE TABLE` statement.
+    fn parse_create_table_query_source(&mut self) -> Result<CreateTableQuery, ParserError> {
+        if let Some(query) = self.maybe_parse(|parser| parser.parse_query())? {
+            Ok(CreateTableQuery::Query(query))
+        } else {
+            Ok(CreateTableQuery::Table(self.parse_object_name(false)?))
+        }
     }
 
     /// Parse `MULTISET` table-kind prefix on `CREATE TABLE`.
@@ -9010,32 +9026,12 @@ impl<'a> Parser<'a> {
         Ok(Some(WithData { data, statistics }))
     }
 
-    /// Parse [`PrimaryIndex`] clause on `CREATE TABLE`.
-    fn parse_primary_index(&mut self) -> Result<Option<PrimaryIndex>, ParserError> {
-        if self.parse_keywords(&[Keyword::NO, Keyword::PRIMARY, Keyword::INDEX]) {
-            return Ok(Some(PrimaryIndex::None));
-        }
-
-        let unique = self.parse_keyword(Keyword::UNIQUE);
-        if self.parse_keywords(&[Keyword::PRIMARY, Keyword::INDEX]) {
-            let name = if self.peek_token_ref().token != Token::LParen {
-                Some(self.parse_identifier()?)
-            } else {
-                None
-            };
-
-            self.expect_token(&Token::LParen)?;
-            let columns = self.parse_comma_separated(|p| p.parse_identifier())?;
-            self.expect_token(&Token::RParen)?;
-
-            Ok(Some(PrimaryIndex::Indexed {
-                unique,
-                name,
-                columns,
-            }))
-        } else if unique {
-            self.prev_token();
-            Ok(None)
+    /// Parse an optional `WITH [NO] CHECK OPTION` trailer on a foreign key.
+    fn maybe_parse_with_check_option(&mut self) -> Result<Option<bool>, ParserError> {
+        if self.parse_keywords(&[Keyword::WITH, Keyword::NO, Keyword::CHECK, Keyword::OPTION]) {
+            Ok(Some(false))
+        } else if self.parse_keywords(&[Keyword::WITH, Keyword::CHECK, Keyword::OPTION]) {
+            Ok(Some(true))
         } else {
             Ok(None)
         }
@@ -9077,6 +9073,14 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(like)
+    }
+
+    fn maybe_parse_create_table_on_commit(&mut self) -> Result<Option<OnCommit>, ParserError> {
+        if self.parse_keywords(&[Keyword::ON, Keyword::COMMIT]) {
+            Ok(Some(self.parse_create_table_on_commit()?))
+        } else {
+            Ok(None)
+        }
     }
 
     pub(crate) fn parse_create_table_on_commit(&mut self) -> Result<OnCommit, ParserError> {
@@ -9759,6 +9763,7 @@ impl<'a> Parser<'a> {
                 }
             }
             let characteristics = self.parse_constraint_characteristics()?;
+            let with_check_option = self.maybe_parse_with_check_option()?;
 
             Ok(Some(
                 ForeignKeyConstraint {
@@ -9771,6 +9776,7 @@ impl<'a> Parser<'a> {
                     on_update,
                     match_kind,
                     characteristics,
+                    with_check_option,
                 }
                 .into(),
             ))
@@ -10231,7 +10237,7 @@ impl<'a> Parser<'a> {
                 }
 
                 let index_type_display = self.parse_index_type_display();
-                if !dialect_of!(self is GenericDialect | MySqlDialect)
+                if !dialect_of!(self is GenericDialect | MySqlDialect | TeradataDialect)
                     && !index_type_display.is_none()
                 {
                     return self.expected_ref(
@@ -10262,6 +10268,21 @@ impl<'a> Parser<'a> {
                     }
                     .into(),
                 ))
+            }
+            Token::Word(w)
+                if w.keyword == Keyword::NO
+                    && self.parse_keywords(&[Keyword::PRIMARY, Keyword::INDEX]) =>
+            {
+                let end_span = self.get_previous_token().span;
+                Ok(Some(TableConstraint::NoPrimaryIndex {
+                    span: next_token.span.union(&end_span),
+                }))
+            }
+            Token::Word(w)
+                if w.keyword == Keyword::PRIMARY && self.peek_keyword(Keyword::INDEX) =>
+            {
+                self.prev_token(); // Put back 'PRIMARY'.
+                self.parse_index_constraint().map(|c| Some(c.into()))
             }
             Token::Word(w) if w.keyword == Keyword::PRIMARY => {
                 // after `PRIMARY` always stay `KEY`
@@ -10321,6 +10342,7 @@ impl<'a> Parser<'a> {
                 }
 
                 let characteristics = self.parse_constraint_characteristics()?;
+                let with_check_option = self.maybe_parse_with_check_option()?;
 
                 Ok(Some(
                     ForeignKeyConstraint {
@@ -10333,6 +10355,7 @@ impl<'a> Parser<'a> {
                         on_update,
                         match_kind,
                         characteristics,
+                        with_check_option,
                     }
                     .into(),
                 ))
@@ -10361,30 +10384,11 @@ impl<'a> Parser<'a> {
             }
             Token::Word(w)
                 if (w.keyword == Keyword::INDEX || w.keyword == Keyword::KEY)
-                    && dialect_of!(self is GenericDialect | MySqlDialect)
+                    && dialect_of!(self is GenericDialect | MySqlDialect | TeradataDialect)
                     && name.is_none() =>
             {
-                let display_as_key = w.keyword == Keyword::KEY;
-
-                let name = match &self.peek_token_ref().token {
-                    Token::Word(word) if word.keyword == Keyword::USING => None,
-                    _ => self.parse_optional_ident()?,
-                };
-
-                let index_type = self.parse_optional_using_then_index_type()?;
-                let columns = self.parse_parenthesized_index_column_list()?;
-                let index_options = self.parse_index_options()?;
-
-                Ok(Some(
-                    IndexConstraint {
-                        display_as_key,
-                        name,
-                        index_type,
-                        columns,
-                        index_options,
-                    }
-                    .into(),
-                ))
+                self.prev_token(); // Put back word.
+                self.parse_index_constraint().map(|c| Some(c.into()))
             }
             Token::Word(w)
                 if (w.keyword == Keyword::FULLTEXT || w.keyword == Keyword::SPATIAL)
@@ -10427,6 +10431,37 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+    }
+
+    fn parse_index_constraint(&mut self) -> Result<IndexConstraint, ParserError> {
+        let kind = if self.parse_keywords(&[Keyword::PRIMARY, Keyword::INDEX]) {
+            IndexConstraintKind::PrimaryIndex
+        } else if self.parse_keyword(Keyword::INDEX) {
+            IndexConstraintKind::Index
+        } else if self.parse_keyword(Keyword::KEY) {
+            IndexConstraintKind::Key
+        } else {
+            return self.expected_ref("index constraint", self.peek_token_ref());
+        };
+
+        let name = match &self.peek_token_ref().token {
+            Token::Word(word) if word.keyword == Keyword::USING => None,
+            _ => self.parse_optional_ident()?,
+        };
+
+        let index_type = self.parse_optional_using_then_index_type()?;
+        let columns = self.parse_parenthesized_index_column_list()?;
+        let index_options = self.parse_index_options()?;
+        let order_by = self.parse_optional_order_by()?;
+
+        Ok(IndexConstraint {
+            kind,
+            name,
+            index_type,
+            columns,
+            index_options,
+            order_by,
+        })
     }
 
     fn parse_optional_nulls_distinct(&mut self) -> Result<NullsDistinctOption, ParserError> {
@@ -10534,6 +10569,8 @@ impl<'a> Parser<'a> {
             KeyOrIndexDisplay::Key
         } else if self.parse_keyword(Keyword::INDEX) {
             KeyOrIndexDisplay::Index
+        } else if self.parse_keywords(&[Keyword::PRIMARY, Keyword::INDEX]) {
+            KeyOrIndexDisplay::PrimaryIndex
         } else {
             KeyOrIndexDisplay::None
         }
@@ -21590,11 +21627,12 @@ mod tests {
             dialect,
             "INDEX (c1)",
             IndexConstraint {
-                display_as_key: false,
+                kind: IndexConstraintKind::Index,
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
+                order_by: None,
             }
             .into()
         );
@@ -21603,11 +21641,12 @@ mod tests {
             dialect,
             "KEY (c1)",
             IndexConstraint {
-                display_as_key: true,
+                kind: IndexConstraintKind::Key,
                 name: None,
                 index_type: None,
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
+                order_by: None,
             }
             .into()
         );
@@ -21616,11 +21655,12 @@ mod tests {
             dialect,
             "INDEX 'index' (c1, c2)",
             TableConstraint::Index(IndexConstraint {
-                display_as_key: false,
+                kind: IndexConstraintKind::Index,
                 name: Some(Ident::with_quote('\'', "index")),
                 index_type: None,
                 columns: vec![mk_expected_col("c1"), mk_expected_col("c2")],
                 index_options: vec![],
+                order_by: None,
             })
         );
 
@@ -21628,11 +21668,12 @@ mod tests {
             dialect,
             "INDEX USING BTREE (c1)",
             IndexConstraint {
-                display_as_key: false,
+                kind: IndexConstraintKind::Index,
                 name: None,
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
+                order_by: None,
             }
             .into()
         );
@@ -21641,11 +21682,12 @@ mod tests {
             dialect,
             "INDEX USING HASH (c1)",
             IndexConstraint {
-                display_as_key: false,
+                kind: IndexConstraintKind::Index,
                 name: None,
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
+                order_by: None,
             }
             .into()
         );
@@ -21654,11 +21696,12 @@ mod tests {
             dialect,
             "INDEX idx_name USING BTREE (c1)",
             IndexConstraint {
-                display_as_key: false,
+                kind: IndexConstraintKind::Index,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::BTree),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
+                order_by: None,
             }
             .into()
         );
@@ -21667,11 +21710,12 @@ mod tests {
             dialect,
             "INDEX idx_name USING HASH (c1)",
             IndexConstraint {
-                display_as_key: false,
+                kind: IndexConstraintKind::Index,
                 name: Some(Ident::new("idx_name")),
                 index_type: Some(IndexType::Hash),
                 columns: vec![mk_expected_col("c1")],
                 index_options: vec![],
+                order_by: None,
             }
             .into()
         );

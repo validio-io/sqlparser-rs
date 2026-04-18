@@ -263,6 +263,43 @@ fn parse_create_table_column_options() {
 }
 
 #[test]
+fn parse_create_table_as_source_table() {
+    teradata().verified_stmt("CREATE TABLE t AS source_tbl");
+    teradata().verified_stmt("CREATE TABLE t AS schema.source_tbl");
+    teradata().verified_stmt("CREATE TABLE t AS source_tbl WITH DATA");
+    teradata().verified_stmt("CREATE TABLE t AS source_tbl WITH NO DATA");
+    teradata().verified_stmt("CREATE TABLE t AS source_tbl WITH DATA AND STATISTICS");
+}
+
+#[test]
+fn parse_create_table_secondary_indexes() {
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT) INDEX (b)");
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT) UNIQUE INDEX (b)");
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT) INDEX idx_b (b)");
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT) UNIQUE INDEX idx_b (b)");
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT, c INT) INDEX (b) UNIQUE INDEX (c)");
+    // Multiple indexes
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT, c INT) INDEX (b) UNIQUE INDEX (c)");
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT) INDEX (b) ORDER BY VALUES(b)");
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT) INDEX (b) ORDER BY HASH(b)");
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT) INDEX (b) ORDER BY (b)");
+    teradata().verified_stmt("CREATE TABLE t (a INT, b INT) UNIQUE PRIMARY INDEX (a) INDEX (b)");
+    teradata().verified_stmt("CREATE TABLE t AS source_tbl INDEX (b)");
+}
+
+#[test]
+fn parse_create_table_foreign_key_with_check_option() {
+    teradata().verified_stmt(
+        "CREATE TABLE t (a INT, FOREIGN KEY (a) REFERENCES other(id) WITH CHECK OPTION)",
+    );
+    teradata().verified_stmt(
+        "CREATE TABLE t (a INT, FOREIGN KEY (a) REFERENCES other(id) WITH NO CHECK OPTION)",
+    );
+    // Column-level REFERENCES with WITH CHECK OPTION
+    teradata().verified_stmt("CREATE TABLE t (a INT REFERENCES other (id) WITH NO CHECK OPTION)");
+}
+
+#[test]
 fn parse_create_table_combined() {
     teradata().verified_stmt(concat!(
         "CREATE MULTISET VOLATILE TABLE foo, NO FALLBACK, NO BEFORE JOURNAL, ",
