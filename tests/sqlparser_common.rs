@@ -6259,10 +6259,13 @@ fn parse_interval_all() {
             value: Box::new(Expr::Value(
                 (Value::SingleQuotedString(String::from("1-1"))).with_empty_span()
             )),
-            leading_field: Some(DateTimeField::Year),
-            leading_precision: None,
-            last_field: Some(DateTimeField::Month),
-            fractional_seconds_precision: None,
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Year,
+                leading_precision: None,
+                last_field: Some(DateTimeField::Month),
+                fractional_seconds_precision: None,
+            }),
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -6274,10 +6277,13 @@ fn parse_interval_all() {
             value: Box::new(Expr::Value(
                 (Value::SingleQuotedString(String::from("01:01.01"))).with_empty_span()
             )),
-            leading_field: Some(DateTimeField::Minute),
-            leading_precision: Some(5),
-            last_field: Some(DateTimeField::Second),
-            fractional_seconds_precision: Some(5),
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Minute,
+                leading_precision: Some(5),
+                last_field: Some(DateTimeField::Second),
+                fractional_seconds_precision: Some(5),
+            }),
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -6289,10 +6295,13 @@ fn parse_interval_all() {
             value: Box::new(Expr::Value(
                 (Value::SingleQuotedString(String::from("1"))).with_empty_span()
             )),
-            leading_field: Some(DateTimeField::Second),
-            leading_precision: Some(5),
-            last_field: None,
-            fractional_seconds_precision: Some(4),
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Second,
+                leading_precision: Some(5),
+                last_field: None,
+                fractional_seconds_precision: Some(4),
+            }),
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -6304,10 +6313,13 @@ fn parse_interval_all() {
             value: Box::new(Expr::Value(
                 (Value::SingleQuotedString(String::from("10"))).with_empty_span()
             )),
-            leading_field: Some(DateTimeField::Hour),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Hour,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }),
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -6317,10 +6329,13 @@ fn parse_interval_all() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::value(number("5"))),
-            leading_field: Some(DateTimeField::Day),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Day,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }),
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -6330,10 +6345,13 @@ fn parse_interval_all() {
     assert_eq!(
         &Expr::Interval(Interval {
             value: Box::new(Expr::value(number("5"))),
-            leading_field: Some(DateTimeField::Days),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Days,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }),
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -6345,10 +6363,13 @@ fn parse_interval_all() {
             value: Box::new(Expr::Value(
                 (Value::SingleQuotedString(String::from("10"))).with_empty_span()
             )),
-            leading_field: Some(DateTimeField::Hour),
-            leading_precision: Some(1),
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Hour,
+                leading_precision: Some(1),
+                last_field: None,
+                fractional_seconds_precision: None,
+            }),
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -6416,10 +6437,7 @@ fn parse_interval_dont_require_unit() {
             value: Box::new(Expr::Value(
                 (Value::SingleQuotedString(String::from("1 DAY"))).with_empty_span()
             )),
-            leading_field: None,
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: None,
         }),
         expr_from_projection(only(&select.projection)),
     );
@@ -6456,10 +6474,13 @@ fn parse_interval_require_qualifier() {
                 op: BinaryOperator::Plus,
                 right: Box::new(Expr::value(number("1"))),
             }),
-            leading_field: Some(DateTimeField::Day),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Day,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }),
         }),
     );
 
@@ -6477,10 +6498,13 @@ fn parse_interval_require_qualifier() {
                     (Value::SingleQuotedString("1".to_string())).with_empty_span()
                 )),
             }),
-            leading_field: Some(DateTimeField::Day),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Day,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }),
         }),
     );
 
@@ -6504,10 +6528,13 @@ fn parse_interval_require_qualifier() {
                     (Value::SingleQuotedString("3".to_string())).with_empty_span()
                 )),
             }),
-            leading_field: Some(DateTimeField::Day),
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Day,
+                leading_precision: None,
+                last_field: None,
+                fractional_seconds_precision: None,
+            }),
         }),
     );
 }
@@ -6524,10 +6551,7 @@ fn parse_interval_disallow_interval_expr() {
             value: Box::new(Expr::Value(
                 (Value::SingleQuotedString(String::from("1 DAY"))).with_empty_span()
             )),
-            leading_field: None,
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: None,
         }),
     );
 
@@ -6547,20 +6571,14 @@ fn parse_interval_disallow_interval_expr() {
                 value: Box::new(Expr::Value(
                     (Value::SingleQuotedString(String::from("1 DAY"))).with_empty_span()
                 )),
-                leading_field: None,
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None,
+                qualifier: None,
             })),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Interval(Interval {
                 value: Box::new(Expr::Value(
                     (Value::SingleQuotedString(String::from("1 SECOND"))).with_empty_span()
                 )),
-                leading_field: None,
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None,
+                qualifier: None,
             }))
         }
     );
@@ -6577,10 +6595,7 @@ fn interval_disallow_interval_expr_gt() {
                 value: Box::new(Expr::Value(
                     (Value::SingleQuotedString("1 second".to_string())).with_empty_span()
                 )),
-                leading_field: None,
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None,
+                qualifier: None,
             },)),
             op: BinaryOperator::Gt,
             right: Box::new(Expr::Identifier(Ident {
@@ -6604,10 +6619,7 @@ fn interval_disallow_interval_expr_double_colon() {
                 value: Box::new(Expr::Value(
                     (Value::SingleQuotedString("1 second".to_string())).with_empty_span()
                 )),
-                leading_field: None,
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None,
+                qualifier: None,
             })),
             data_type: DataType::Text,
             array: false,
@@ -6670,10 +6682,7 @@ fn parse_interval_and_or_xor() {
                             value: Box::new(Expr::Value(
                                 (Value::SingleQuotedString("5 days".to_string())).with_empty_span(),
                             )),
-                            leading_field: None,
-                            leading_precision: None,
-                            last_field: None,
-                            fractional_seconds_precision: None,
+                            qualifier: None,
                         })),
                     }),
                 }),
@@ -6696,10 +6705,7 @@ fn parse_interval_and_or_xor() {
                             value: Box::new(Expr::Value(
                                 (Value::SingleQuotedString("3 days".to_string())).with_empty_span(),
                             )),
-                            leading_field: None,
-                            leading_precision: None,
-                            last_field: None,
-                            fractional_seconds_precision: None,
+                            qualifier: None,
                         })),
                     }),
                 }),

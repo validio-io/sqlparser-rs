@@ -39,7 +39,6 @@ fn dialect_methods() {
     assert!(d.is_identifier_part('#'));
     assert!(d.supports_group_by_expr());
     assert!(!d.supports_boolean_literals());
-    assert!(d.require_interval_qualifier());
     assert!(d.supports_comment_on());
     assert!(d.supports_create_table_select());
     assert!(d.supports_execute_immediate());
@@ -375,4 +374,19 @@ fn parse_create_join_index() {
         "CREATE JOIN INDEX ji, FALLBACK, CHECKSUM = ON ",
         "AS SELECT a FROM t PRIMARY INDEX (a)"
     ));
+}
+
+#[test]
+fn parse_interval_qualifier_suffix() {
+    teradata().verified_stmt("SELECT a YEAR TO MONTH");
+    teradata().verified_stmt(concat!(
+        "SELECT 1 WHERE ",
+        "((CURRENT_TIMESTAMP - CURRENT_TIMESTAMP) DAY (4) TO MINUTE) > ",
+        "INTERVAL '30' MINUTE"
+    ));
+    teradata().verified_stmt("SELECT (a - b) HOUR");
+    teradata().verified_stmt("SELECT (a - b) SECOND (3, 2)");
+    teradata().verified_stmt("SELECT (a - b) YEAR TO MONTH");
+    teradata().verified_stmt("SELECT a YEAR TO MONTH");
+    teradata().verified_stmt("SELECT a DAY (4) TO MINUTE");
 }

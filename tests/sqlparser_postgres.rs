@@ -6039,10 +6039,7 @@ fn parse_at_time_zone() {
             value: Box::new(Expr::Value(
                 Value::SingleQuotedString("23 hours".to_owned()).with_empty_span(),
             )),
-            leading_field: None,
-            leading_precision: None,
-            last_field: None,
-            fractional_seconds_precision: None,
+            qualifier: None,
         })),
     };
     pretty_assertions::assert_eq!(

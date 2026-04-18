@@ -452,70 +452,89 @@ impl fmt::Display for Array {
     }
 }
 
+/// Interval qualifier clause. e.g. `DAY(4) TO MINUTE`
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IntervalQualifier {
+    /// Span of the full qualifier clause.
+    pub span: Span,
+    /// Leading time unit (e.g., `DAY`, `MINUTE`).
+    pub leading_field: DateTimeField,
+    /// Optional leading precision, e.g. the `4` in `DAY(4)`.
+    pub leading_precision: Option<u64>,
+    /// Optional trailing time unit for a range (e.g., `SECOND`).
+    pub last_field: Option<DateTimeField>,
+    /// Fractional seconds precision, for `SECOND(n)` or `SECOND(m, n)` forms.
+    pub fractional_seconds_precision: Option<u64>,
+}
+
+impl fmt::Display for IntervalQualifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Special SQL format: `SECOND (<leading>, <fractional>)` — no `TO`.
+        if let (DateTimeField::Second, Some(leading), Some(fsec)) = (
+            &self.leading_field,
+            self.leading_precision,
+            self.fractional_seconds_precision,
+        ) {
+            return write!(f, "SECOND ({leading}, {fsec})");
+        }
+        write!(f, "{}", self.leading_field)?;
+        if let Some(leading_precision) = self.leading_precision {
+            write!(f, " ({leading_precision})")?;
+        }
+        if let Some(last_field) = &self.last_field {
+            write!(f, " TO {last_field}")?;
+        }
+        if let Some(fractional_seconds_precision) = self.fractional_seconds_precision {
+            write!(f, " ({fractional_seconds_precision})")?;
+        }
+        Ok(())
+    }
+}
+
 /// Represents an INTERVAL expression, roughly in the following format:
-/// `INTERVAL '<value>' [ <leading_field> [ (<leading_precision>) ] ]
-/// [ TO <last_field> [ (<fractional_seconds_precision>) ] ]`,
+/// `INTERVAL '<value>' [ <qualifier> ]`,
 /// e.g. `INTERVAL '123:45.67' MINUTE(3) TO SECOND(2)`.
-///
-/// The parser does not validate the `<value>`, nor does it ensure
-/// that the `<leading_field>` units >= the units in `<last_field>`,
-/// so the user will have to reject intervals like `HOUR TO YEAR`.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
 pub struct Interval {
     /// The interval value expression (commonly a string literal).
     pub value: Box<Expr>,
-    /// Optional leading time unit (e.g., `HOUR`, `MINUTE`).
-    pub leading_field: Option<DateTimeField>,
-    /// Optional leading precision for the leading field.
-    pub leading_precision: Option<u64>,
-    /// Optional trailing time unit for a range (e.g., `SECOND`).
-    pub last_field: Option<DateTimeField>,
-    /// The fractional seconds precision, when specified.
-    ///
-    /// See SQL `SECOND(n)` or `SECOND(m, n)` forms.
-    pub fractional_seconds_precision: Option<u64>,
+    /// Optional qualifier (e.g., `DAY(4) TO MINUTE`).
+    pub qualifier: Option<IntervalQualifier>,
 }
 
 impl fmt::Display for Interval {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let value = self.value.as_ref();
-        match (
-            &self.leading_field,
-            self.leading_precision,
-            self.fractional_seconds_precision,
-        ) {
-            (
-                Some(DateTimeField::Second),
-                Some(leading_precision),
-                Some(fractional_seconds_precision),
-            ) => {
-                // When the leading field is SECOND, the parser guarantees that
-                // the last field is None.
-                assert!(self.last_field.is_none());
-                write!(
-                    f,
-                    "INTERVAL {value} SECOND ({leading_precision}, {fractional_seconds_precision})"
-                )
-            }
-            _ => {
-                write!(f, "INTERVAL {value}")?;
-                if let Some(leading_field) = &self.leading_field {
-                    write!(f, " {leading_field}")?;
-                }
-                if let Some(leading_precision) = self.leading_precision {
-                    write!(f, " ({leading_precision})")?;
-                }
-                if let Some(last_field) = &self.last_field {
-                    write!(f, " TO {last_field}")?;
-                }
-                if let Some(fractional_seconds_precision) = self.fractional_seconds_precision {
-                    write!(f, " ({fractional_seconds_precision})")?;
-                }
-                Ok(())
-            }
+        write!(f, "INTERVAL {}", self.value)?;
+        if let Some(qualifier) = &self.qualifier {
+            write!(f, " {qualifier}")?;
         }
+        Ok(())
+    }
+}
+
+/// An expression carrying a trailing interval qualifier, e.g.
+/// `(end_time - start_time) DAY(4) TO MINUTE` or `a YEAR TO MONTH`. Unlike
+/// [`Interval`], no `INTERVAL` keyword is present — the qualifier attaches
+/// directly to an arbitrary expression.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Date-and-Time-Functions-and-Expressions/Period-Functions-and-Operators/INTERVAL/INTERVAL-Syntax)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct IntervalQualifiedExpr {
+    /// The qualified expression.
+    pub expr: Box<Expr>,
+    /// The trailing interval qualifier.
+    pub qualifier: IntervalQualifier,
+}
+
+impl fmt::Display for IntervalQualifiedExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.expr, self.qualifier)
     }
 }
 
@@ -1283,6 +1302,9 @@ pub enum Expr {
     Array(Array),
     /// An interval expression e.g. `INTERVAL '1' YEAR`
     Interval(Interval),
+    /// An expression with an interval qualifier suffix.
+    /// See [`IntervalQualifiedExpr`].
+    IntervalQualified(IntervalQualifiedExpr),
     /// `MySQL` specific text search function [(1)].
     ///
     /// Syntax:
@@ -2165,6 +2187,7 @@ impl fmt::Display for Expr {
             Expr::Interval(interval) => {
                 write!(f, "{interval}")
             }
+            Expr::IntervalQualified(e) => write!(f, "{e}"),
             Expr::MatchAgainst {
                 columns,
                 match_value: match_expr,
@@ -12517,10 +12540,13 @@ mod tests {
             value: Box::new(Expr::Value(
                 Value::SingleQuotedString(String::from("123:45.67")).with_empty_span(),
             )),
-            leading_field: Some(DateTimeField::Minute),
-            leading_precision: Some(10),
-            last_field: Some(DateTimeField::Second),
-            fractional_seconds_precision: Some(9),
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Minute,
+                leading_precision: Some(10),
+                last_field: Some(DateTimeField::Second),
+                fractional_seconds_precision: Some(9),
+            }),
         });
         assert_eq!(
             "INTERVAL '123:45.67' MINUTE (10) TO SECOND (9)",
@@ -12531,10 +12557,13 @@ mod tests {
             value: Box::new(Expr::Value(
                 Value::SingleQuotedString(String::from("5")).with_empty_span(),
             )),
-            leading_field: Some(DateTimeField::Second),
-            leading_precision: Some(1),
-            last_field: None,
-            fractional_seconds_precision: Some(3),
+            qualifier: Some(IntervalQualifier {
+                span: Span::empty(),
+                leading_field: DateTimeField::Second,
+                leading_precision: Some(1),
+                last_field: None,
+                fractional_seconds_precision: Some(3),
+            }),
         });
         assert_eq!("INTERVAL '5' SECOND (1, 3)", format!("{interval}"));
     }

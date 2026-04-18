@@ -966,10 +966,13 @@ fn parse_typed_struct_syntax_bigquery() {
                 value: Box::new(Expr::Value(
                     Value::SingleQuotedString("2".into()).with_empty_span()
                 )),
-                leading_field: Some(DateTimeField::Hour),
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None
+                qualifier: Some(IntervalQualifier {
+                    span: Span::empty(),
+                    leading_field: DateTimeField::Hour,
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None,
+                }),
             })],
             fields: vec![StructField {
                 field_name: None,
@@ -1308,10 +1311,13 @@ fn parse_typed_struct_syntax_bigquery_and_generic() {
                 value: Box::new(Expr::Value(
                     Value::SingleQuotedString("1".into()).with_empty_span()
                 )),
-                leading_field: Some(DateTimeField::Month),
-                leading_precision: None,
-                last_field: None,
-                fractional_seconds_precision: None
+                qualifier: Some(IntervalQualifier {
+                    span: Span::empty(),
+                    leading_field: DateTimeField::Month,
+                    leading_precision: None,
+                    last_field: None,
+                    fractional_seconds_precision: None,
+                }),
             })],
             fields: vec![StructField {
                 field_name: None,

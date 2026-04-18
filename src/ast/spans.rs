@@ -1667,6 +1667,7 @@ impl Spanned for Expr {
             Expr::Dictionary(_) => Span::empty(),
             Expr::Map(_) => Span::empty(),
             Expr::Interval(interval) => interval.value.span(),
+            Expr::IntervalQualified(e) => e.expr.span().union(&e.qualifier.span),
             Expr::Wildcard(token) => token.0.span,
             Expr::QualifiedWildcard(object_name, token) => union_spans(
                 object_name

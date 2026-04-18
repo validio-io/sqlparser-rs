@@ -291,6 +291,25 @@ impl ParserOptions {
     }
 }
 
+/// Arguments to [`Parser::parse_create_table`].
+#[derive(Debug, Clone, Copy)]
+pub struct CreateTableFlags {
+    /// `CREATE OR REPLACE TABLE`.
+    pub or_replace: bool,
+    /// `CREATE TEMP[ORARY] TABLE`.
+    pub temporary: bool,
+    /// `CREATE GLOBAL TABLE`
+    pub global: Option<bool>,
+    /// `CREATE TRANSIENT TABLE`
+    pub transient: bool,
+    /// `CREATE VOLATILE TABLE`
+    pub volatile: bool,
+    /// `CREATE MULTISET TABLE`
+    pub multiset: Option<bool>,
+    /// `CREATE JOIN INDEX`
+    pub join_index: bool,
+}
+
 #[derive(Copy, Clone)]
 enum ParserState {
     /// The default state of the parser.
@@ -3300,32 +3319,37 @@ impl<'a> Parser<'a> {
             self.parse_prefix()?
         };
 
-        // Following the string literal is a qualifier which indicates the units
-        // of the duration specified in the string literal.
-        //
-        // Note that PostgreSQL allows omitting the qualifier, so we provide
-        // this more general implementation.
-        let leading_field = if self.next_token_is_temporal_unit() {
-            Some(self.parse_date_time_field()?)
-        } else if self.dialect.require_interval_qualifier() {
+        let qualifier = self.maybe_parse_interval_qualifier()?;
+        if qualifier.is_none() && self.dialect.require_interval_qualifier() {
             return parser_err!(
                 "INTERVAL requires a unit after the literal value",
                 self.peek_token_ref().span.start
             );
-        } else {
-            None
-        };
+        }
 
-        let (leading_precision, last_field, fsec_precision) =
-            if leading_field == Some(DateTimeField::Second) {
-                // SQL mandates special syntax for `SECOND TO SECOND` literals.
-                // Instead of
-                //     `SECOND [(<leading precision>)] TO SECOND[(<fractional seconds precision>)]`
-                // one must use the special format:
-                //     `SECOND [( <leading precision> [ , <fractional seconds precision>] )]`
-                let last_field = None;
+        Ok(Expr::Interval(Interval {
+            value: Box::new(value),
+            qualifier,
+        }))
+    }
+
+    /// Parse an [`IntervalQualifier`].
+    pub fn maybe_parse_interval_qualifier(
+        &mut self,
+    ) -> Result<Option<IntervalQualifier>, ParserError> {
+        if !self.next_token_is_temporal_unit() {
+            return Ok(None);
+        }
+
+        let start_span = self.peek_token_ref().span;
+        let leading_field = self.parse_date_time_field()?;
+
+        let (leading_precision, last_field, fractional_seconds_precision) =
+            if leading_field == DateTimeField::Second {
+                // SQL mandates special syntax for `SECOND TO SECOND` literals:
+                //     `SECOND [( <leading_precision> [ , <fractional_seconds_precision>] )]`
                 let (leading_precision, fsec_precision) = self.parse_optional_precision_scale()?;
-                (leading_precision, last_field, fsec_precision)
+                (leading_precision, None, fsec_precision)
             } else {
                 let leading_precision = self.parse_optional_precision()?;
                 if self.parse_keyword(Keyword::TO) {
@@ -3341,19 +3365,24 @@ impl<'a> Parser<'a> {
                 }
             };
 
-        Ok(Expr::Interval(Interval {
-            value: Box::new(value),
+        let end_span = self.get_previous_token().span;
+        Ok(Some(IntervalQualifier {
+            span: start_span.union(&end_span),
             leading_field,
             leading_precision,
             last_field,
-            fractional_seconds_precision: fsec_precision,
+            fractional_seconds_precision,
         }))
     }
 
     /// Peek at the next token and determine if it is a temporal unit
     /// like `second`.
     pub fn next_token_is_temporal_unit(&mut self) -> bool {
-        if let Token::Word(word) = &self.peek_token_ref().token {
+        Self::token_is_temporal_unit(&self.peek_token_ref().token)
+    }
+
+    pub(crate) fn token_is_temporal_unit(token: &Token) -> bool {
+        if let Token::Word(word) = token {
             matches!(
                 word.keyword,
                 Keyword::YEAR
@@ -4093,6 +4122,20 @@ impl<'a> Parser<'a> {
                         self.expected_ref("OF after MEMBER", self.peek_token_ref())
                     }
                 }
+                _ if self.dialect.supports_interval_qualified_expressions()
+                    && Self::token_is_temporal_unit(&tok.token) =>
+                {
+                    self.prev_token(); // Put back temporal unit.
+                    let Some(qualifier) = self.maybe_parse_interval_qualifier()? else {
+                        let tok = self.token_at(tok_index);
+                        return self.expected_ref("interval qualifier", tok);
+                    };
+
+                    Ok(Expr::IntervalQualified(IntervalQualifiedExpr {
+                        expr: Box::new(expr),
+                        qualifier,
+                    }))
+                }
                 // Can only happen if `get_next_precedence` got out of sync with this function
                 _ => parser_err!(
                     format!("No infix parser for token {:?}", tok.token),
@@ -4119,6 +4162,7 @@ impl<'a> Parser<'a> {
             self.parse_json_access(expr)
         } else {
             // Can only happen if `get_next_precedence` got out of sync with this function
+            let tok = self.token_at(tok_index);
             parser_err!(
                 format!("No infix parser for token {:?}", tok.token),
                 tok.span.start
@@ -5169,14 +5213,26 @@ impl<'a> Parser<'a> {
         if self.peek_keywords(&[Keyword::SNAPSHOT, Keyword::TABLE]) {
             self.parse_create_snapshot_table().map(Into::into)
         } else if self.parse_keyword(Keyword::TABLE) {
-            self.parse_create_table(
-                or_replace, temporary, global, transient, volatile, multiset, false,
-            )
+            self.parse_create_table(CreateTableFlags {
+                or_replace,
+                temporary,
+                global,
+                transient,
+                volatile,
+                multiset,
+                join_index: false,
+            })
             .map(Into::into)
         } else if self.parse_keywords(&[Keyword::JOIN, Keyword::INDEX]) {
-            self.parse_create_table(
-                or_replace, temporary, global, transient, volatile, multiset, true,
-            )
+            self.parse_create_table(CreateTableFlags {
+                or_replace,
+                temporary,
+                global,
+                transient,
+                volatile,
+                multiset,
+                join_index: true,
+            })
             .map(Into::into)
         } else if self.peek_keyword(Keyword::MATERIALIZED)
             || self.peek_keyword(Keyword::VIEW)
@@ -8521,14 +8577,17 @@ impl<'a> Parser<'a> {
     /// Parse `CREATE TABLE` statement.
     pub fn parse_create_table(
         &mut self,
-        or_replace: bool,
-        temporary: bool,
-        global: Option<bool>,
-        transient: bool,
-        volatile: bool,
-        multiset: Option<bool>,
-        join_index: bool,
+        flags: CreateTableFlags,
     ) -> Result<CreateTable, ParserError> {
+        let CreateTableFlags {
+            or_replace,
+            temporary,
+            global,
+            transient,
+            volatile,
+            multiset,
+            join_index,
+        } = flags;
         let allow_unquoted_hyphen = dialect_of!(self is BigQueryDialect);
         let if_not_exists = self.parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parse_object_name(allow_unquoted_hyphen)?;

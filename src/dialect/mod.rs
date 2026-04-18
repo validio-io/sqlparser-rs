@@ -909,6 +909,12 @@ pub trait Dialect: Debug + Any {
             | Token::Question
             | Token::QuestionAnd
             | Token::CustomBinaryOperator(_) => Ok(p!(PgOther)),
+            token
+                if self.supports_interval_qualified_expressions()
+                    && Parser::token_is_temporal_unit(token) =>
+            {
+                Ok(p!(Is))
+            }
             _ => Ok(self.prec_unknown()),
         }
     }
@@ -1033,6 +1039,13 @@ pub trait Dialect: Debug + Any {
     /// CREATE RECURSIVE VIEW v (id INTEGER, n INTEGER) AS ...
     /// ```
     fn supports_typed_view_columns(&self) -> bool {
+        false
+    }
+
+    /// Returns true if the dialect supports interval qualified expression.
+    ///
+    /// e.g. `(a - b) DAY(4) TO MINUTE` or `a YEAR TO MONTH`.
+    fn supports_interval_qualified_expressions(&self) -> bool {
         false
     }
 

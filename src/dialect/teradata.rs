@@ -67,11 +67,6 @@ impl Dialect for TeradataDialect {
         false
     }
 
-    /// See <https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Types-and-Literals/Data-Literals/Interval-Literals>
-    fn require_interval_qualifier(&self) -> bool {
-        true
-    }
-
     /// See <https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/Comment-Help-and-Show-Statements/COMMENT-Comment-Placing-Form>
     fn supports_comment_on(&self) -> bool {
         true
@@ -114,6 +109,11 @@ impl Dialect for TeradataDialect {
 
     /// See <https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-VIEW-and-REPLACE-VIEW>
     fn supports_typed_view_columns(&self) -> bool {
+        true
+    }
+
+    /// See <https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Date-and-Time-Functions-and-Expressions/Period-Functions-and-Operators/INTERVAL/INTERVAL-Syntax>
+    fn supports_interval_qualified_expressions(&self) -> bool {
         true
     }
 }
