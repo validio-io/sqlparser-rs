@@ -70,6 +70,26 @@ fn parse_create_table_multiset() {
 }
 
 #[test]
+fn parse_create_view_locking_clause() {
+    teradata().verified_stmt("CREATE VIEW v AS LOCKING TABLE x FOR READ SELECT * FROM x");
+    teradata().verified_stmt("CREATE VIEW v AS LOCKING ROW FOR ACCESS NOWAIT SELECT * FROM x");
+    teradata().verified_stmt(
+        "CREATE VIEW v AS LOCKING TABLE a FOR ACCESS LOCKING TABLE b FOR READ SELECT * FROM a, b",
+    );
+    teradata().verified_stmt("CREATE VIEW v AS LOCKING ROW IN ACCESS SELECT * FROM x");
+    teradata()
+        .verified_stmt("CREATE VIEW v AS LOCKING DATABASE db FOR EXCLUSIVE SELECT * FROM db.t");
+    teradata().verified_stmt("CREATE VIEW v AS LOCKING FOR SHARE SELECT * FROM x");
+    teradata()
+        .verified_stmt("CREATE VIEW v AS LOCKING TABLE a FOR ACCESS MODE NOWAIT SELECT * FROM a");
+    teradata().verified_stmt("CREATE VIEW v AS LOCKING ROW FOR WRITE MODE SELECT * FROM x");
+    teradata().verified_stmt("CREATE VIEW v AS LOCK ROW FOR ACCESS SELECT * FROM x");
+    teradata().verified_stmt(
+        "CREATE VIEW v AS LOCK TABLE a FOR ACCESS LOCKING ROW FOR READ SELECT * FROM a",
+    );
+}
+
+#[test]
 fn parse_create_table_volatile() {
     teradata().verified_stmt("CREATE VOLATILE TABLE foo (id INT)");
     teradata().verified_stmt("CREATE MULTISET VOLATILE TABLE foo (id INT)");

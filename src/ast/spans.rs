@@ -19,7 +19,7 @@ use crate::{
     ast::{
         ddl::AlterSchema, query::SelectItemQualifiedWildcardKind, AlterSchemaOperation, AlterTable,
         ColumnOptions, CreateOperator, CreateOperatorClass, CreateOperatorFamily, CreateView,
-        ExportData, Owner, TypedString,
+        ExportData, LockingClause, LockingTarget, Owner, TypedString,
     },
     tokenizer::TokenWithSpan,
 };
@@ -2491,8 +2491,20 @@ impl Spanned for CreateView {
                 .chain(core::iter::once(self.query.span()))
                 .chain(core::iter::once(self.options.span()))
                 .chain(self.cluster_by.iter().map(|i| i.span))
-                .chain(self.to.iter().map(|i| i.span())),
+                .chain(self.to.iter().map(|i| i.span()))
+                .chain(self.locking.iter().map(|i| i.span())),
         )
+    }
+}
+
+impl Spanned for LockingClause {
+    fn span(&self) -> Span {
+        match &self.target {
+            Some(LockingTarget::Table(name))
+            | Some(LockingTarget::Database(name))
+            | Some(LockingTarget::View(name)) => name.span(),
+            None | Some(LockingTarget::Row) => Span::empty(),
+        }
     }
 }
 

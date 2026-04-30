@@ -6666,6 +6666,9 @@ impl<'a> Parser<'a> {
         };
 
         self.expect_keyword_is(Keyword::AS)?;
+
+        let locking = self.parse_locking_clauses()?;
+
         let query = self.parse_query()?;
         let with_check_option = self.maybe_parse_with_check_option()?;
 
@@ -6698,7 +6701,60 @@ impl<'a> Parser<'a> {
             replace,
             recursive,
             with_check_option,
+            locking,
         })
+    }
+
+    /// Parse zero or more `LOCKING` clauses.
+    fn parse_locking_clauses(&mut self) -> Result<Vec<LockingClause>, ParserError> {
+        let mut clauses = Vec::new();
+        loop {
+            let short = match self.parse_one_of_keywords(&[Keyword::LOCKING, Keyword::LOCK]) {
+                Some(Keyword::LOCKING) => false,
+                Some(Keyword::LOCK) => true,
+                _ => break,
+            };
+            let target = if self.parse_keyword(Keyword::ROW) {
+                Some(LockingTarget::Row)
+            } else if self.parse_keyword(Keyword::TABLE) {
+                Some(LockingTarget::Table(self.parse_object_name(false)?))
+            } else if self.parse_keyword(Keyword::DATABASE) {
+                Some(LockingTarget::Database(self.parse_object_name(false)?))
+            } else if self.parse_keyword(Keyword::VIEW) {
+                Some(LockingTarget::View(self.parse_object_name(false)?))
+            } else {
+                None
+            };
+
+            let next_token = self.next_token();
+            let in_keyword = match &next_token.token {
+                Token::Word(w) if w.keyword == Keyword::FOR => false,
+                Token::Word(w) if w.keyword == Keyword::IN => true,
+                _ => return self.expected("lock direction", next_token),
+            };
+
+            let next_token = self.next_token();
+            let lock_type = match &next_token.token {
+                Token::Word(w) if w.keyword == Keyword::ACCESS => LockingType::Access,
+                Token::Word(w) if w.keyword == Keyword::READ => LockingType::Read,
+                Token::Word(w) if w.keyword == Keyword::WRITE => LockingType::Write,
+                Token::Word(w) if w.keyword == Keyword::EXCLUSIVE => LockingType::Exclusive,
+                Token::Word(w) if w.keyword == Keyword::SHARE => LockingType::Share,
+                _ => return self.expected("lock type", next_token),
+            };
+
+            let mode = self.parse_keyword(Keyword::MODE);
+            let nowait = self.parse_keyword(Keyword::NOWAIT);
+            clauses.push(LockingClause {
+                short,
+                target,
+                in_keyword,
+                lock_type,
+                mode,
+                nowait,
+            });
+        }
+        Ok(clauses)
     }
 
     fn maybe_parse_with_check_option(&mut self) -> Result<Option<CheckOption>, ParserError> {

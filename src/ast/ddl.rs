@@ -4940,6 +4940,10 @@ pub struct CreateView {
     ///
     /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-VIEW-and-REPLACE-VIEW/CREATE-VIEW-and-REPLACE-VIEW-Syntax-Elements/WITH-CHECK-OPTION)
     pub with_check_option: Option<CheckOption>,
+    /// `LOCKING` clauses.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-VIEW-and-REPLACE-VIEW/CREATE-VIEW-and-REPLACE-VIEW-Syntax)
+    pub locking: Vec<LockingClause>,
 }
 
 /// `WITH CHECK OPTION` trailer on a `CREATE VIEW|TABLE` statement.
@@ -4968,6 +4972,87 @@ impl fmt::Display for CheckOption {
             CheckOption::Local => "WITH LOCAL CHECK OPTION",
             CheckOption::No => "WITH NO CHECK OPTION",
         })
+    }
+}
+
+/// `LOCKING` clause in a `CREATE VIEW` statement.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-VIEW-and-REPLACE-VIEW/CREATE-VIEW-and-REPLACE-VIEW-Syntax-Elements/locking_clause)
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct LockingClause {
+    /// True if `LOCK` is used as a shorthand for `LOCKING`.
+    pub short: bool,
+    /// Target object to lock.
+    pub target: Option<LockingTarget>,
+    /// True if `IN` is used as the in place of `FOR`.
+    pub in_keyword: bool,
+    /// Lock type.
+    pub lock_type: LockingType,
+    /// `MODE` keyword modifier.
+    pub mode: bool,
+    /// `NOWAIT` modifier.
+    pub nowait: bool,
+}
+
+/// Target object of a [`LockingClause`].
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum LockingTarget {
+    /// `LOCKING ROW`
+    Row,
+    /// `LOCKING TABLE name`.
+    Table(ObjectName),
+    /// `LOCKING DATABASE name`.
+    Database(ObjectName),
+    /// `LOCKING VIEW name`.
+    View(ObjectName),
+}
+
+/// Lock type for a [`LockingClause`].
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub enum LockingType {
+    /// `ACCESS`
+    Access,
+    /// `READ`
+    Read,
+    /// `WRITE`
+    Write,
+    /// `EXCLUSIVE`
+    Exclusive,
+    /// `SHARE`
+    Share,
+}
+
+impl fmt::Display for LockingClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(if self.short { "LOCK" } else { "LOCKING" })?;
+        match &self.target {
+            None => {}
+            Some(LockingTarget::Row) => f.write_str(" ROW")?,
+            Some(LockingTarget::Table(name)) => write!(f, " TABLE {name}")?,
+            Some(LockingTarget::Database(name)) => write!(f, " DATABASE {name}")?,
+            Some(LockingTarget::View(name)) => write!(f, " VIEW {name}")?,
+        }
+        f.write_str(if self.in_keyword { " IN " } else { " FOR " })?;
+        f.write_str(match self.lock_type {
+            LockingType::Access => "ACCESS",
+            LockingType::Read => "READ",
+            LockingType::Write => "WRITE",
+            LockingType::Exclusive => "EXCLUSIVE",
+            LockingType::Share => "SHARE",
+        })?;
+        if self.mode {
+            f.write_str(" MODE")?;
+        }
+        if self.nowait {
+            f.write_str(" NOWAIT")?;
+        }
+        Ok(())
     }
 }
 
@@ -5036,6 +5121,9 @@ impl fmt::Display for CreateView {
         }
         f.write_str(" AS")?;
         SpaceOrNewline.fmt(f)?;
+        for lc in &self.locking {
+            write!(f, "{lc} ")?;
+        }
         self.query.fmt(f)?;
         if let Some(check_option) = &self.with_check_option {
             write!(f, " {check_option}")?;

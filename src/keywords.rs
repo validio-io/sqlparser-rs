@@ -611,6 +611,7 @@ define_keywords!(
     LOCATION,
     LOCK,
     LOCKED,
+    LOCKING,
     LOG,
     LOGIN,
     LOGS,
