@@ -2492,7 +2492,8 @@ impl Spanned for CreateView {
                 .chain(core::iter::once(self.options.span()))
                 .chain(self.cluster_by.iter().map(|i| i.span))
                 .chain(self.to.iter().map(|i| i.span()))
-                .chain(self.locking.iter().map(|i| i.span())),
+                .chain(self.locking.iter().map(|i| i.span()))
+                .chain(self.as_of.iter().map(|e| e.span())),
         )
     }
 }

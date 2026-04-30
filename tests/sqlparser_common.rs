@@ -8381,6 +8381,7 @@ fn parse_create_view() {
             recursive: _,
             with_check_option: _,
             locking: _,
+            as_of: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8502,6 +8503,7 @@ fn parse_create_view_temporary() {
             recursive: _,
             with_check_option: _,
             locking: _,
+            as_of: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8548,6 +8550,7 @@ fn parse_create_or_replace_view() {
             recursive: _,
             with_check_option: _,
             locking: _,
+            as_of: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8598,6 +8601,7 @@ fn parse_create_or_replace_materialized_view() {
             recursive: _,
             with_check_option: _,
             locking: _,
+            as_of: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("v", name.to_string());
@@ -8644,6 +8648,7 @@ fn parse_create_materialized_view() {
             recursive: _,
             with_check_option: _,
             locking: _,
+            as_of: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());
@@ -8690,6 +8695,7 @@ fn parse_create_materialized_view_with_cluster_by() {
             recursive: _,
             with_check_option: _,
             locking: _,
+            as_of: _,
         }) => {
             assert_eq!(or_alter, false);
             assert_eq!("myschema.myview", name.to_string());

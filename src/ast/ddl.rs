@@ -4944,6 +4944,10 @@ pub struct CreateView {
     ///
     /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Definition-Language-Syntax-and-Examples/View-Statements/CREATE-VIEW-and-REPLACE-VIEW/CREATE-VIEW-and-REPLACE-VIEW-Syntax)
     pub locking: Vec<LockingClause>,
+    /// `AS OF date_timestamp_expression` temporal qualifier.
+    ///
+    /// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/Temporal-Table-Support/SQL-Data-Definition-Language-Temporal-Forms/CREATE-VIEW/REPLACE-VIEW-Temporal-Forms)
+    pub as_of: Option<Expr>,
 }
 
 /// `WITH CHECK OPTION` trailer on a `CREATE VIEW|TABLE` statement.
@@ -5123,6 +5127,9 @@ impl fmt::Display for CreateView {
         SpaceOrNewline.fmt(f)?;
         for lc in &self.locking {
             write!(f, "{lc} ")?;
+        }
+        if let Some(as_of) = &self.as_of {
+            write!(f, "AS OF {as_of} ")?;
         }
         self.query.fmt(f)?;
         if let Some(check_option) = &self.with_check_option {

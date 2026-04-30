@@ -70,6 +70,17 @@ fn parse_create_table_multiset() {
 }
 
 #[test]
+fn parse_create_view_as_of() {
+    teradata()
+        .verified_stmt("CREATE VIEW v AS AS OF TIMESTAMP '2020-01-01 00:00:00' SELECT * FROM t");
+    teradata().verified_stmt("CREATE VIEW v AS AS OF DATE '2020-01-01' SELECT * FROM t");
+    teradata().verified_stmt("CREATE VIEW v AS AS OF CURRENT_TIMESTAMP SELECT * FROM t");
+    teradata().verified_stmt(
+        "REPLACE VIEW v AS LOCKING ROW FOR ACCESS AS OF TIMESTAMP '2020-01-01 00:00:00' SELECT * FROM t",
+    );
+}
+
+#[test]
 fn parse_create_view_locking_clause() {
     teradata().verified_stmt("CREATE VIEW v AS LOCKING TABLE x FOR READ SELECT * FROM x");
     teradata().verified_stmt("CREATE VIEW v AS LOCKING ROW FOR ACCESS NOWAIT SELECT * FROM x");

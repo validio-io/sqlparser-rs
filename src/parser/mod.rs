@@ -6669,6 +6669,12 @@ impl<'a> Parser<'a> {
 
         let locking = self.parse_locking_clauses()?;
 
+        let as_of = if self.parse_keywords(&[Keyword::AS, Keyword::OF]) {
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         let query = self.parse_query()?;
         let with_check_option = self.maybe_parse_with_check_option()?;
 
@@ -6702,6 +6708,7 @@ impl<'a> Parser<'a> {
             recursive,
             with_check_option,
             locking,
+            as_of,
         })
     }
 
