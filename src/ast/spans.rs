@@ -38,16 +38,16 @@ use super::{
     FunctionArgExpr, FunctionArgumentClause, FunctionArgumentList, FunctionArguments, GroupByExpr,
     HavingBound, IfStatement, IlikeSelectItem, IndexColumn, Insert, Interpolate, InterpolateExpr,
     Join, JoinConstraint, JoinOperator, JsonPath, JsonPathElem, LateralView, LimitClause,
-    MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause, MergeInsertExpr,
-    MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList, NamedWindowDefinition, ObjectName,
-    ObjectNamePart, Offset, OnConflict, OnConflictAction, OnInsert, OpenStatement, OrderBy,
-    OrderByExpr, OrderByKind, OutputClause, Partition, PartitionBoundValue, PivotValueSource,
-    ProjectionSelect, Query, RaiseStatement, RaiseStatementValue, ReferentialAction,
-    RenameSelectItem, ReplaceSelectElement, ReplaceSelectItem, Select, SelectInto, SelectItem,
-    SetExpr, SqlOption, Statement, Subscript, SymbolDefinition, TableAlias, TableAliasColumnDef,
-    TableConstraint, TableFactor, TableObject, TableOptionsClustered, TableWithJoins, Update,
-    UpdateTableFromKind, Use, Values, ViewColumnDef, WhileStatement, WildcardAdditionalOptions,
-    With, WithFill,
+    LockingStatement, MatchRecognizePattern, Measure, Merge, MergeAction, MergeClause,
+    MergeInsertExpr, MergeInsertKind, MergeUpdateExpr, NamedParenthesizedList,
+    NamedWindowDefinition, ObjectName, ObjectNamePart, Offset, OnConflict, OnConflictAction,
+    OnInsert, OpenStatement, OrderBy, OrderByExpr, OrderByKind, OutputClause, Partition,
+    PartitionBoundValue, PivotValueSource, ProjectionSelect, Query, RaiseStatement,
+    RaiseStatementValue, ReferentialAction, RenameSelectItem, ReplaceSelectElement,
+    ReplaceSelectItem, Select, SelectInto, SelectItem, SetExpr, SqlOption, Statement, Subscript,
+    SymbolDefinition, TableAlias, TableAliasColumnDef, TableConstraint, TableFactor, TableObject,
+    TableOptionsClustered, TableWithJoins, Update, UpdateTableFromKind, Use, Values, ViewColumnDef,
+    WhileStatement, WildcardAdditionalOptions, With, WithFill,
 };
 
 /// Given an iterator of spans, return the [Span::union] of all spans.
@@ -491,6 +491,7 @@ impl Spanned for Statement {
             Statement::RenameTable { .. } => Span::empty(),
             Statement::RaisError { .. } => Span::empty(),
             Statement::Throw(_) => Span::empty(),
+            Statement::Locking(s) => s.span(),
             Statement::Print { .. } => Span::empty(),
             Statement::WaitFor(_) => Span::empty(),
             Statement::Return { .. } => Span::empty(),
@@ -2506,6 +2507,17 @@ impl Spanned for LockingClause {
             | Some(LockingTarget::View(name)) => name.span(),
             None | Some(LockingTarget::Row) => Span::empty(),
         }
+    }
+}
+
+impl Spanned for LockingStatement {
+    fn span(&self) -> Span {
+        union_spans(
+            self.locking
+                .iter()
+                .map(|c| c.span())
+                .chain(self.statement.iter().map(|s| s.span())),
+        )
     }
 }
 

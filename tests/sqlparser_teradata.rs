@@ -101,6 +101,27 @@ fn parse_create_view_locking_clause() {
 }
 
 #[test]
+fn parse_locking_request_modifier() {
+    let dialects = all_dialects_where(|d| d.supports_locking_request_modifier());
+    dialects.verified_stmt("LOCKING TABLE foo FOR ACCESS SELECT * FROM foo");
+    dialects.verified_stmt("LOCK ROW FOR ACCESS SELECT * FROM foo");
+    dialects.verified_stmt("LOCKING FOR ACCESS SELECT * FROM foo");
+    dialects.verified_stmt("LOCK TABLE foo FOR ACCESS SELECT * FROM foo");
+    dialects.verified_stmt("LOCKING TABLE foo FOR ACCESS MODE NOWAIT SELECT * FROM foo");
+    dialects.verified_stmt("LOCK ROW IN WRITE SELECT * FROM foo");
+    dialects.verified_stmt("LOCKING VIEW v FOR READ SELECT * FROM v");
+    dialects.verified_stmt("LOCK DATABASE db FOR EXCLUSIVE SELECT * FROM db.t");
+    dialects.verified_stmt("LOCKING TABLE foo FOR WRITE INSERT INTO foo VALUES (1)");
+    dialects.verified_stmt("LOCK TABLE foo FOR WRITE UPDATE foo SET a = 1 WHERE b = 2");
+    dialects.verified_stmt("LOCKING TABLE foo FOR WRITE DELETE FROM foo WHERE a = 1");
+    dialects.verified_stmt("LOCK TABLE foo FOR ACCESS");
+    dialects.verified_stmt("LOCKING ROW FOR ACCESS NOWAIT");
+    dialects.verified_stmt(
+        "LOCKING TABLE a FOR ACCESS LOCK TABLE b FOR READ LOCKING ROW FOR WRITE SELECT * FROM a, b",
+    );
+}
+
+#[test]
 fn parse_create_table_volatile() {
     teradata().verified_stmt("CREATE VOLATILE TABLE foo (id INT)");
     teradata().verified_stmt("CREATE MULTISET VOLATILE TABLE foo (id INT)");

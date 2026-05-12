@@ -116,4 +116,9 @@ impl Dialect for TeradataDialect {
     fn supports_interval_qualified_expressions(&self) -> bool {
         true
     }
+
+    /// See <https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Manipulation-Language/Statement-Syntax/LOCKING-Request-Modifier>
+    fn supports_locking_request_modifier(&self) -> bool {
+        true
+    }
 }

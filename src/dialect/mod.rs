@@ -1228,6 +1228,13 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns true if the dialect supports `LOCKING` / `LOCK` request modifier.
+    ///
+    /// See <https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Manipulation-Language/Statement-Syntax/LOCKING-Request-Modifier>.
+    fn supports_locking_request_modifier(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect accepts a comma-separated list of table-level
     /// options placed between the table name and the column-list parenthesis, e.g.
     ///

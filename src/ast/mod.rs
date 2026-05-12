@@ -2941,6 +2941,29 @@ impl fmt::Display for ThrowStatement {
     }
 }
 
+/// `LOCKING` request modifier.
+///
+/// [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Manipulation-Language/Statement-Syntax/LOCKING-Request-Modifier).
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct LockingStatement {
+    /// One or more `LOCKING` / `LOCK` clauses preceding the request.
+    pub locking: Vec<LockingClause>,
+    /// The SQL request.
+    pub statement: Option<Box<Statement>>,
+}
+
+impl fmt::Display for LockingStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", display_separated(&self.locking, " "))?;
+        if let Some(statement) = &self.statement {
+            write!(f, " {statement}")?;
+        }
+        Ok(())
+    }
+}
+
 /// Represents an expression assignment within a variable `DECLARE` statement.
 ///
 /// Examples:
@@ -4869,6 +4892,14 @@ pub enum Statement {
     },
     /// A MSSQL `THROW` statement.
     Throw(ThrowStatement),
+    /// A Teradata `LOCKING` request modifier.
+    ///
+    /// ```sql
+    /// LOCKING TABLE foo FOR ACCESS SELECT * FROM foo;
+    /// ```
+    ///
+    /// See [Teradata](https://docs.teradata.com/r/Enterprise_IntelliFlex_VMware/SQL-Data-Manipulation-Language/Statement-Syntax/LOCKING-Request-Modifier).
+    Locking(LockingStatement),
     /// ```sql
     /// PRINT msg_str | @local_variable | string_expr
     /// ```
@@ -6363,6 +6394,7 @@ impl fmt::Display for Statement {
                 Ok(())
             }
             Statement::Throw(s) => write!(f, "{s}"),
+            Statement::Locking(s) => write!(f, "{s}"),
             Statement::Print(s) => write!(f, "{s}"),
             Statement::WaitFor(s) => write!(f, "{s}"),
             Statement::Return(r) => write!(f, "{r}"),
@@ -12199,6 +12231,12 @@ impl From<RaiseStatement> for Statement {
 impl From<ThrowStatement> for Statement {
     fn from(t: ThrowStatement) -> Self {
         Self::Throw(t)
+    }
+}
+
+impl From<LockingStatement> for Statement {
+    fn from(s: LockingStatement) -> Self {
+        Self::Locking(s)
     }
 }
 

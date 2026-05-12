@@ -726,9 +726,17 @@ impl<'a> Parser<'a> {
                 // `INSTALL` is duckdb specific https://duckdb.org/docs/extensions/overview
                 Keyword::INSTALL if self.dialect.supports_install() => self.parse_install(),
                 Keyword::LOAD => self.parse_load(),
+                Keyword::LOCKING if self.dialect.supports_locking_request_modifier() => {
+                    self.prev_token();
+                    self.parse_locking_request().map(Into::into)
+                }
                 Keyword::LOCK => {
                     self.prev_token();
-                    self.parse_lock_statement().map(Into::into)
+                    if self.dialect.supports_locking_request_modifier() {
+                        self.parse_locking_request().map(Into::into)
+                    } else {
+                        self.parse_lock_statement().map(Into::into)
+                    }
                 }
                 Keyword::OPTIMIZE if self.dialect.supports_optimize_table() => {
                     self.parse_optimize_table()
@@ -6710,6 +6718,16 @@ impl<'a> Parser<'a> {
             locking,
             as_of,
         })
+    }
+
+    /// Parse a `LOCKING` request modifier.
+    ///
+    /// See [Statement::Locking].
+    pub fn parse_locking_request(&mut self) -> Result<LockingStatement, ParserError> {
+        let locking = self.parse_locking_clauses()?;
+        let statement = self.maybe_parse(|parser| parser.parse_statement().map(Box::new))?;
+
+        Ok(LockingStatement { locking, statement })
     }
 
     /// Parse zero or more `LOCKING` clauses.
